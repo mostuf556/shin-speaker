@@ -1,24 +1,33 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Provider } from "react-redux";
+import { store } from "@/store";
+import { HebrewShinGame } from "@/components/HebrewShinGame";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "הגיית האות ש · Hebrew Shin Trainer" },
+      {
+        name: "description",
+        content:
+          "אימון הגייה בעברית עבור האות ש עם זיהוי דיבור, הקלטות והשמעה מודגשת.",
+      },
+      { property: "og:title", content: "Hebrew Shin Pronunciation Trainer" },
+      {
+        property: "og:description",
+        content: "Practice pronouncing the Hebrew letter ש with speech recognition.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
 function Index() {
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
+    <Provider store={store}>
+      <HebrewShinGame />
+    </Provider>
   );
 }
