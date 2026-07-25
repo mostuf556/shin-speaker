@@ -32,6 +32,12 @@ export const generateTTS = createServerFn({ method: "POST" })
     }
 
     const buf = await response.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+    const bytes = new Uint8Array(buf);
+    let binary = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    const base64 = btoa(binary);
     return { audioBase64: base64, mime: "audio/mpeg" };
   });
