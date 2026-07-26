@@ -7,8 +7,11 @@ import {
   setPlayback,
   setRecording,
   setActive,
+  setStatus,
+  setMicLevel,
+  setError,
 } from "@/store/slices/session";
-import { addSentence, Sentence, WordTiming } from "@/store/slices/sentences";
+import { addSentence, sentenceAddedToHistory, Sentence, WordTiming } from "@/store/slices/sentences";
 import { appendLog } from "@/store/slices/log";
 import { generateTTS } from "@/lib/tts.functions";
 
@@ -25,6 +28,8 @@ export function useGameEngine() {
   useEffect(() => {
     settingsRef.current = settings;
   }, [settings]);
+  const activeRef = useRef(false);
+  const errorPausedRef = useRef(false);
 
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -36,6 +41,10 @@ export function useGameEngine() {
   const loopingRef = useRef(false);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const ttsPlaybackRef = useRef<HTMLAudioElement | null>(null);
+  const boardClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const meterRafRef = useRef<number | null>(null);
 
   const log = useCallback(
     (tag: any, message: string, data?: any) => {
@@ -48,6 +57,67 @@ export function useGameEngine() {
       );
     },
     [dispatch],
+  );
+
+  const reportError = useCallback(
+    (message: string, err?: unknown) => {
+      const stack =
+        err instanceof Error ? err.stack : err ? String(err) : undefined;
+      log("error", message, stack?.slice(0, 400));
+      dispatch(setError({ message, stack }));
+      errorPausedRef.current = true;
+      loopingRef.current = false;
+    },
+    [dispatch, log],
+  );
+
+  const stopMeter = useCallback(() => {
+    if (meterRafRef.current != null) {
+      cancelAnimationFrame(meterRafRef.current);
+      meterRafRef.current = null;
+    }
+    try {
+      audioCtxRef.current?.close();
+    } catch {
+      /* noop */
+    }
+    audioCtxRef.current = null;
+    analyserRef.current = null;
+    dispatch(setMicLevel(0));
+  }, [dispatch]);
+
+  const startMeter = useCallback(
+    (stream: MediaStream) => {
+      try {
+        const AC: typeof AudioContext =
+          (window as any).AudioContext || (window as any).webkitAudioContext;
+        const ctx = new AC();
+        const src = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 512;
+        src.connect(analyser);
+        audioCtxRef.current = ctx;
+        analyserRef.current = analyser;
+        const buf = new Uint8Array(analyser.frequencyBinCount);
+        const tick = () => {
+          if (!analyserRef.current) return;
+          analyserRef.current.getByteTimeDomainData(buf);
+          let sum = 0;
+          for (let i = 0; i < buf.length; i++) {
+            const v = (buf[i] - 128) / 128;
+            sum += v * v;
+          }
+          const rms = Math.sqrt(sum / buf.length);
+          const level = Math.min(1, rms * 3);
+          dispatch(setMicLevel(level));
+          meterRafRef.current = requestAnimationFrame(tick);
+        };
+        meterRafRef.current = requestAnimationFrame(tick);
+      } catch (e) {
+        log("recorder", "meter init failed", (e as any)?.message);
+      }
+    },
+    [dispatch, log],
   );
 
   const stopRecording = useCallback(() => {
@@ -65,16 +135,56 @@ export function useGameEngine() {
     }
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    stopMeter();
     dispatch(setRecording(false));
     log("recorder", "stopRecording");
-  }, [dispatch, log]);
+  }, [dispatch, log, stopMeter]);
+
+  async function playNativeTTS(text: string): Promise<void> {
+    return new Promise((resolve) => {
+      try {
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = "he-IL";
+        u.onend = () => resolve();
+        u.onerror = () => resolve();
+        window.speechSynthesis.speak(u);
+      } catch {
+        resolve();
+      }
+    });
+  }
+
+  async function playApiTTS(text: string): Promise<void> {
+    const res = await generateTTS({ data: { text, voice: "alloy" } });
+    const audio = new Audio(`data:${res.mime};base64,${res.audioBase64}`);
+    ttsPlaybackRef.current = audio;
+    await new Promise<void>((resolve) => {
+      audio.onended = () => resolve();
+      audio.onerror = () => resolve();
+      audio.play().catch(() => resolve());
+    });
+  }
+
+  async function playTTS(text: string) {
+    try {
+      if (settingsRef.current.ttsEngine === "native") {
+        await playNativeTTS(text);
+      } else {
+        await playApiTTS(text);
+      }
+    } catch (e: any) {
+      reportError(`TTS failed: ${e?.message ?? e}`, e);
+    }
+  }
 
   const runActionsFor = useCallback(
     async (sentence: Sentence) => {
       const acts = settingsRef.current.actions;
       log("action", "running actions", acts);
       for (const act of acts) {
+        if (errorPausedRef.current) return;
         if (act === "playback" && sentence.audioUrl) {
+          dispatch(setStatus("playback-in-game"));
           await new Promise<void>((resolve) => {
             const audio = new Audio(sentence.audioUrl!);
             ttsPlaybackRef.current = audio;
@@ -84,35 +194,21 @@ export function useGameEngine() {
             audio.play().catch(() => resolve());
           });
         } else if (act === "word-tts") {
-          // find first ש-word
           const shWord = sentence.words.find((w) => w.word.includes("ש"));
           if (shWord) {
+            dispatch(setStatus("tts-word"));
             log("tts", "word-tts", shWord.word);
             await playTTS(shWord.word);
           }
         } else if (act === "sentence-tts") {
+          dispatch(setStatus("tts-sentence"));
           log("tts", "sentence-tts", sentence.text);
           await playTTS(sentence.text);
         }
       }
     },
-    [log],
+    [dispatch, log],
   );
-
-  async function playTTS(text: string) {
-    try {
-      const res = await generateTTS({ data: { text, voice: "alloy" } });
-      const audio = new Audio(`data:${res.mime};base64,${res.audioBase64}`);
-      ttsPlaybackRef.current = audio;
-      await new Promise<void>((resolve) => {
-        audio.onended = () => resolve();
-        audio.onerror = () => resolve();
-        audio.play().catch(() => resolve());
-      });
-    } catch (e: any) {
-      console.error(e);
-    }
-  }
 
   const startIteration = useCallback(async () => {
     if (!loopingRef.current) return;
@@ -122,9 +218,8 @@ export function useGameEngine() {
     const SR: any =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
-      log("sst", "SpeechRecognition unsupported");
+      reportError("SpeechRecognition not supported in this browser");
       dispatch(setActive(false));
-      loopingRef.current = false;
       return;
     }
 
@@ -132,12 +227,12 @@ export function useGameEngine() {
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e: any) {
-      log("recorder", "mic denied", e?.message);
+      reportError(`Microphone access denied: ${e?.message ?? e}`, e);
       dispatch(setActive(false));
-      loopingRef.current = false;
       return;
     }
     streamRef.current = stream;
+    startMeter(stream);
 
     const mr = new MediaRecorder(stream);
     mediaRecorderRef.current = mr;
@@ -152,9 +247,7 @@ export function useGameEngine() {
 
     mr.onstop = () => {
       const durationMs = performance.now() - startedAtRef.current;
-      const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
-      const url = URL.createObjectURL(blob);
-      log("recorder", "stopped", { durationMs, size: blob.size });
+      log("recorder", "stopped", { durationMs });
     };
 
     const recognition = new SR();
@@ -176,7 +269,6 @@ export function useGameEngine() {
       const combined = (finalTextThisRun + finalPart + interim).trim();
       dispatch(setInterim(combined));
 
-      // update per-word timings
       const currentWords = extractWords(combined);
       const elapsed = (performance.now() - startedAtRef.current) / 1000;
       for (let i = knownWordsRef.current.length; i < currentWords.length; i++) {
@@ -187,21 +279,46 @@ export function useGameEngine() {
 
       if (finalPart) {
         finalTextThisRun += finalPart;
-        // finalize
         finalizeSentence(finalTextThisRun.trim());
       }
     };
 
     recognition.onerror = (e: any) => {
-      log("sst", "error", e?.error || String(e));
+      const kind = e?.error || String(e);
+      log("sst", "error", kind);
+      // "no-speech" and "aborted" are recoverable — restart the loop.
+      if (kind === "no-speech" || kind === "aborted") {
+        try {
+          recognition.stop();
+        } catch {
+          /* noop */
+        }
+        return;
+      }
+      reportError(`Speech recognition error: ${kind}`);
     };
     recognition.onend = () => {
       log("sst", "end");
+      // If loop still active and no error, restart cleanly to keep listening.
+      if (loopingRef.current && !errorPausedRef.current && activeRef.current) {
+        try {
+          if (mr.state !== "inactive") mr.stop();
+        } catch {
+          /* noop */
+        }
+        stream.getTracks().forEach((t) => t.stop());
+        stopMeter();
+        dispatch(setRecording(false));
+        // small backoff before next iteration
+        setTimeout(() => {
+          if (loopingRef.current) startIteration();
+        }, 200);
+      }
     };
 
     const finalizeSentence = (text: string) => {
       if (!loopingRef.current) return;
-      loopingRef.current = false; // temporarily; will resume after actions
+      loopingRef.current = false;
       try {
         recognition.stop();
       } catch {
@@ -215,6 +332,7 @@ export function useGameEngine() {
         });
         const url = URL.createObjectURL(blob);
         stream.getTracks().forEach((t) => t.stop());
+        stopMeter();
 
         const containsShin = text.includes("ש");
         const sentence: Sentence = {
@@ -228,14 +346,22 @@ export function useGameEngine() {
         };
         log("sentence", "saved", { text, containsShin, words: sentence.words.length });
         dispatch(addSentence(sentence));
+        dispatch(sentenceAddedToHistory({ id: sentence.id, text: sentence.text }));
+
+        // Clear the main board after configured timeout
+        if (boardClearTimerRef.current) clearTimeout(boardClearTimerRef.current);
+        boardClearTimerRef.current = setTimeout(() => {
+          dispatch(clearBoard());
+        }, settingsRef.current.boardClearTimeoutMs);
 
         (async () => {
-          if (containsShin) {
+          if (containsShin && !errorPausedRef.current) {
             await runActionsFor(sentence);
           }
-          // loop again
+          if (errorPausedRef.current || !activeRef.current) return;
           loopingRef.current = true;
           dispatch(setRecording(false));
+          dispatch(setStatus("recording"));
           startIteration();
         })();
       };
@@ -251,12 +377,15 @@ export function useGameEngine() {
     mr.start();
     recognition.start();
     dispatch(setRecording(true));
+    dispatch(setStatus("recording"));
     log("recorder", "started");
     log("sst", "started");
-  }, [dispatch, log, runActionsFor]);
+  }, [dispatch, log, reportError, runActionsFor, startMeter, stopMeter]);
 
   const start = useCallback(() => {
     if (loopingRef.current) return;
+    errorPausedRef.current = false;
+    activeRef.current = true;
     loopingRef.current = true;
     dispatch(setActive(true));
     log("session", "start");
@@ -265,38 +394,42 @@ export function useGameEngine() {
 
   const stop = useCallback(() => {
     loopingRef.current = false;
+    activeRef.current = false;
     dispatch(setActive(false));
+    dispatch(setStatus("idle"));
     stopRecording();
     log("session", "stop");
   }, [dispatch, log, stopRecording]);
 
-  const playSentence = useCallback(
-    (sentenceId: string, fromTime = 0) => {
-      const s = (window as any).__store_state__?.().sentences.items.find(
-        (x: Sentence) => x.id === sentenceId,
-      );
-      // fallback via dispatch selector is done from component; keep simple
-      return { s, fromTime };
-    },
-    [],
-  );
+  const dismissError = useCallback(() => {
+    dispatch(setError(null));
+    errorPausedRef.current = false;
+    dispatch(setStatus(activeRef.current ? "recording" : "idle"));
+    if (activeRef.current) {
+      loopingRef.current = true;
+      startIteration();
+    }
+  }, [dispatch, startIteration]);
 
-  // Playback helper exposed for components
   const playRecording = useCallback(
     (sentence: Sentence, fromTime: number = 0) => {
-      if (!sentence.audioUrl) return;
-      // stop existing
+      if (!sentence.audioUrl) {
+        log("playback", "no audio url", sentence.id);
+        return;
+      }
       audioElementRef.current?.pause();
       const audio = new Audio(sentence.audioUrl);
       audioElementRef.current = audio;
       audio.currentTime = Math.max(0, fromTime);
+      dispatch(
+        setStatus(activeRef.current ? "playback-in-game" : "playback-out-of-game"),
+      );
       dispatch(setPlayback({ sentenceId: sentence.id, currentTime: fromTime }));
       log("playback", "start", { id: sentence.id, fromTime });
 
       audio.ontimeupdate = () => {
         const t = audio.currentTime;
         dispatch(setPlayback({ sentenceId: sentence.id, currentTime: t }));
-        // find current word
         let idx = -1;
         for (let i = 0; i < sentence.words.length; i++) {
           if (sentence.words[i].time <= t) idx = i;
@@ -314,57 +447,91 @@ export function useGameEngine() {
         log("playback", "ended", sentence.id);
         dispatch(setPlayback({ sentenceId: null }));
         dispatch(setHighlight(null));
+        if (!activeRef.current) dispatch(setStatus("idle"));
+        else dispatch(setStatus("recording"));
       };
-      audio.play().catch((e) => log("playback", "play error", e?.message));
+      audio.play().catch((e) => {
+        log("playback", "play error", e?.message);
+        reportError(`Playback failed: ${e?.message ?? e}`, e);
+      });
     },
-    [dispatch, log],
+    [dispatch, log, reportError],
   );
 
   const playTTSHighlighted = useCallback(
     async (sentence: Sentence) => {
       log("tts", "start", sentence.text);
+      dispatch(setStatus("tts-sentence"));
       try {
-        const res = await generateTTS({
-          data: { text: sentence.text, voice: "alloy" },
-        });
-        const audio = new Audio(`data:${res.mime};base64,${res.audioBase64}`);
-        ttsPlaybackRef.current = audio;
-        audio.onloadedmetadata = () => {
-          const dur = audio.duration || 1;
-          const per = dur / Math.max(1, sentence.words.length);
-          audio.ontimeupdate = () => {
+        if (settingsRef.current.ttsEngine === "native") {
+          // Native has no reliable per-word timing; approximate over duration.
+          const total = Math.max(1, sentence.words.length) * 0.45;
+          const start = performance.now();
+          const timer = window.setInterval(() => {
+            const elapsed = (performance.now() - start) / 1000;
+            const per = total / Math.max(1, sentence.words.length);
             const idx = Math.min(
               sentence.words.length - 1,
-              Math.floor(audio.currentTime / per),
+              Math.floor(elapsed / per),
             );
             dispatch(
               setHighlight({ source: "tts", sentenceId: sentence.id, wordIndex: idx }),
             );
-          };
-        };
-        audio.onended = () => {
+          }, 80);
+          await playNativeTTS(sentence.text);
+          clearInterval(timer);
           dispatch(setHighlight(null));
-          log("tts", "ended");
-        };
-        await audio.play();
+        } else {
+          const res = await generateTTS({
+            data: { text: sentence.text, voice: "alloy" },
+          });
+          const audio = new Audio(`data:${res.mime};base64,${res.audioBase64}`);
+          ttsPlaybackRef.current = audio;
+          audio.onloadedmetadata = () => {
+            const dur = audio.duration || 1;
+            const per = dur / Math.max(1, sentence.words.length);
+            audio.ontimeupdate = () => {
+              const idx = Math.min(
+                sentence.words.length - 1,
+                Math.floor(audio.currentTime / per),
+              );
+              dispatch(
+                setHighlight({
+                  source: "tts",
+                  sentenceId: sentence.id,
+                  wordIndex: idx,
+                }),
+              );
+            };
+          };
+          audio.onended = () => {
+            dispatch(setHighlight(null));
+            log("tts", "ended");
+          };
+          await audio.play();
+        }
+        if (!activeRef.current) dispatch(setStatus("idle"));
       } catch (e: any) {
-        log("tts", "error", e?.message);
+        reportError(`TTS failed: ${e?.message ?? e}`, e);
       }
     },
-    [dispatch, log],
+    [dispatch, log, reportError],
   );
 
   useEffect(() => {
     return () => {
       loopingRef.current = false;
+      activeRef.current = false;
       try {
         recognitionRef.current?.stop();
       } catch {
         /* noop */
       }
       streamRef.current?.getTracks().forEach((t) => t.stop());
+      stopMeter();
+      if (boardClearTimerRef.current) clearTimeout(boardClearTimerRef.current);
     };
-  }, []);
+  }, [stopMeter]);
 
-  return { start, stop, playRecording, playTTSHighlighted, playSentence };
+  return { start, stop, playRecording, playTTSHighlighted, dismissError };
 }

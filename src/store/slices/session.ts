@@ -1,5 +1,19 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
+export type AppStatus =
+  | "idle"
+  | "recording"
+  | "tts-word"
+  | "tts-sentence"
+  | "playback-in-game"
+  | "playback-out-of-game"
+  | "error";
+
+export interface AppError {
+  message: string;
+  stack?: string;
+}
+
 interface SessionState {
   active: boolean;
   recording: boolean;
@@ -7,6 +21,9 @@ interface SessionState {
   playingSentenceId: string | null;
   playbackCurrentTime: number;
   highlight: { source: "playback" | "tts"; sentenceId: string; wordIndex: number } | null;
+  status: AppStatus;
+  micLevel: number; // 0..1
+  error: AppError | null;
 }
 
 const initialState: SessionState = {
@@ -16,6 +33,9 @@ const initialState: SessionState = {
   playingSentenceId: null,
   playbackCurrentTime: 0,
   highlight: null,
+  status: "idle",
+  micLevel: 0,
+  error: null,
 };
 
 const slice = createSlice({
@@ -49,6 +69,20 @@ const slice = createSlice({
     ) {
       state.highlight = a.payload;
     },
+    setStatus(state, a: PayloadAction<AppStatus>) {
+      state.status = a.payload;
+    },
+    setMicLevel(state, a: PayloadAction<number>) {
+      state.micLevel = a.payload;
+    },
+    setError(state, a: PayloadAction<AppError | null>) {
+      state.error = a.payload;
+      if (a.payload) state.status = "error";
+    },
+    clearError(state) {
+      state.error = null;
+      if (state.status === "error") state.status = "idle";
+    },
   },
 });
 
@@ -59,5 +93,9 @@ export const {
   clearBoard,
   setPlayback,
   setHighlight,
+  setStatus,
+  setMicLevel,
+  setError,
+  clearError,
 } = slice.actions;
 export default slice.reducer;

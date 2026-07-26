@@ -28,11 +28,16 @@ const slice = createSlice({
     addSentence(state, a: PayloadAction<Sentence>) {
       state.items.unshift(a.payload);
     },
+    // Fires right after addSentence — makes the "added to history" event
+    // visible in the Redux action stream (item 9).
+    sentenceAddedToHistory(_state, _a: PayloadAction<{ id: string; text: string }>) {
+      /* signal-only action */
+    },
     clearAll(state) {
       state.items = [];
     },
   },
 });
 
-export const { addSentence, clearAll } = slice.actions;
+export const { addSentence, sentenceAddedToHistory, clearAll } = slice.actions;
 export default slice.reducer;
