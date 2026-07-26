@@ -270,10 +270,14 @@ export function useGameEngine() {
         if (r.isFinal) finalPart += r[0].transcript;
         else interim += r[0].transcript;
       }
-      const combined = (finalTextThisRun + finalPart + interim).trim();
-      dispatch(setInterim(combined));
 
-      const currentWords = extractWords(combined);
+      const previousText = finalTextThisRun.trim();
+      const displayText = finalPart.trim()
+        ? finalPart.trim()
+        : `${previousText}${previousText && interim ? " " : ""}${interim}`.trim();
+      dispatch(setInterim(displayText));
+
+      const currentWords = extractWords(displayText);
       const elapsed = (performance.now() - startedAtRef.current) / 1000;
       const newWords: WordTiming[] = [];
       for (let i = 0; i < currentWords.length; i++) {
@@ -286,9 +290,13 @@ export function useGameEngine() {
       }
       wordsRef.current = newWords;
       knownWordsRef.current = currentWords;
-      if (finalPart) {
-        log("sst", "final", finalPart);
-        finalTextThisRun += finalPart;
+      if (finalPart.trim()) {
+        const normalizedFinal = finalPart.trim();
+        log("sst", "final", normalizedFinal);
+        if (previousText) {
+          finalizeSentence(previousText);
+        }
+        finalTextThisRun = normalizedFinal;
       }
     };
 
