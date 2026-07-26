@@ -40,6 +40,59 @@ const STATUS_BG: Record<AppStatus, string> = {
   error: "bg-red-100 dark:bg-red-950/60",
 };
 
+const STATUS_COLUMNS = [
+  { key: "idle", label: "idle" },
+  { key: "playing", label: "playing" },
+  { key: "recording", label: "recording" },
+  { key: "error", label: "error" },
+] as const;
+
+function AppStatusVisualizer({ status }: { status: AppStatus }) {
+  const column =
+    status === "error"
+      ? "error"
+      : status === "recording"
+        ? "recording"
+        : status === "idle"
+          ? "idle"
+          : "playing";
+
+  return (
+    <div className="flex items-center gap-2" aria-label="app-status-visualizer">
+      {STATUS_COLUMNS.map((item) => {
+        const active = column === item.key;
+        const baseClass =
+          "min-w-20 rounded-md border px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-wide transition-colors";
+        const activeClass =
+          item.key === "error"
+            ? "border-red-500 bg-red-500 text-white"
+            : item.key === "recording"
+              ? "border-rose-500 bg-rose-500 text-white"
+              : item.key === "playing"
+                ? "border-emerald-500 bg-emerald-500 text-white"
+                : "border-border bg-background text-foreground";
+        const inactiveClass =
+          item.key === "error"
+            ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300"
+            : item.key === "recording"
+              ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-300"
+              : item.key === "playing"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300"
+                : "border-border bg-card text-muted-foreground";
+
+        return (
+          <div
+            key={item.key}
+            className={`${baseClass} ${active ? activeClass : inactiveClass}`}
+          >
+            {item.label}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function HebrewShinGame() {
   const dispatch = useAppDispatch();
   const active = useAppSelector((s) => s.session.active);
@@ -92,12 +145,7 @@ export function HebrewShinGame() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <span
-              data-testid="status-badge"
-              className="text-xs px-2 py-1 rounded border bg-card"
-            >
-              סטטוס: {STATUS_LABELS[status]}
-            </span>
+            <AppStatusVisualizer status={status} />
             {!active ? (
               <Button
                 data-testid="start-button"
