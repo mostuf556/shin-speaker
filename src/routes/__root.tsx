@@ -77,14 +77,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "הגיית האות ש · Hebrew Shin Trainer" },
+      { name: "description", content: "אימון הגייה בעברית עבור האות ש עם זיהוי דיבור, הקלטות והשמעה מודגשת." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "הגיית האות ש · Hebrew Shin Trainer" },
+      { property: "og:description", content: "אימון הגייה בעברית עבור האות ש עם זיהוי דיבור, הקלטות והשמעה מודגשת." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "הגיית האות ש · Hebrew Shin Trainer" },
+      { name: "twitter:description", content: "אימון הגייה בעברית עבור האות ש עם זיהוי דיבור, הקלטות והשמעה מודגשת." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/bfacf148-87a3-498a-9ffe-17997cd98459/id-preview-10fed1af--1e9fb675-ee24-4287-9479-77956fe0c0ce.lovable.app-1785023460867.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/bfacf148-87a3-498a-9ffe-17997cd98459/id-preview-10fed1af--1e9fb675-ee24-4287-9479-77956fe0c0ce.lovable.app-1785023460867.png" },
     ],
     links: [
       {

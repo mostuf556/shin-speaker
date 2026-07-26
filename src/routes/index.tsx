@@ -12,10 +12,10 @@ export const Route = createFileRoute("/")({
         content:
           "אימון הגייה בעברית עבור האות ש עם זיהוי דיבור, הקלטות והשמעה מודגשת.",
       },
-      { property: "og:title", content: "Hebrew Shin Pronunciation Trainer" },
+      { property: "og:title", content: "הגיית האות ש · Hebrew Shin Trainer" },
       {
         property: "og:description",
-        content: "Practice pronouncing the Hebrew letter ש with speech recognition.",
+        content: "אימון הגייה בעברית עבור האות ש עם זיהוי דיבור, הקלטות והשמעה מודגשת.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
