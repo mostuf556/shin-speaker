@@ -47,6 +47,7 @@ export function useGameEngine() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const meterRafRef = useRef<number | null>(null);
+  const currentSentenceRef = useRef("");
 
   const log = useCallback(
     (tag: any, message: string, data?: any) => {
@@ -242,6 +243,7 @@ export function useGameEngine() {
     startedAtRef.current = performance.now();
     wordsRef.current = [];
     knownWordsRef.current = [];
+    currentSentenceRef.current = "";
 
     mr.ondataavailable = (e) => {
       if (e.data.size > 0) chunksRef.current.push(e.data);
@@ -257,10 +259,9 @@ export function useGameEngine() {
     const recognition = new SR();
     recognitionRef.current = recognition;
     recognition.lang = "he-IL";
-    recognition.continuous = true;
+    recognition.continuous = false;
     recognition.interimResults = true;
 
-    let finalTextThisRun = "";
     let finalizedThisRun = false;
 
     recognition.onresult = (event: any) => {
@@ -270,7 +271,12 @@ export function useGameEngine() {
       const transcript = result[0].transcript.trim();
       if (!transcript) return;
 
-      dispatch(setInterim(transcript));
+      currentSentenceRef.current = transcript;
+
+      log("sst", result.isFinal ? "final-result" : "interim-result", {
+        transcript,
+        isFinal: result.isFinal,
+      });
 
       const currentWords = extractWords(transcript);
       const elapsed = (performance.now() - startedAtRef.current) / 1000;
@@ -285,15 +291,17 @@ export function useGameEngine() {
       }
       wordsRef.current = newWords;
       knownWordsRef.current = currentWords;
+      dispatch(setInterim(transcript));
 
       if (result.isFinal) {
+        if (finalizedThisRun) return;
+        finalizedThisRun = true;
         const normalizedFinal = transcript;
         log("sst", "final", normalizedFinal);
-        if (!finalizedThisRun) {
-          finalizedThisRun = true;
-          finalTextThisRun = normalizedFinal;
-          finalizeSentence(normalizedFinal);
-        }
+        finalizeSentence(normalizedFinal);
+        dispatch(clearBoard());
+        wordsRef.current = [];
+        knownWordsRef.current = [];
       }
     };
 
@@ -309,8 +317,7 @@ export function useGameEngine() {
     recognition.onend = () => {
       log("sst", "end");
       if (!loopingRef.current || errorPausedRef.current || !activeRef.current) return;
-      if (finalTextThisRun.trim()) {
-        finalizeSentence(finalTextThisRun.trim());
+      if (finalizedThisRun) {
         return;
       }
       try {
