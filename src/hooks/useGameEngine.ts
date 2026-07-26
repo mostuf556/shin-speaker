@@ -261,23 +261,18 @@ export function useGameEngine() {
     recognition.interimResults = true;
 
     let finalTextThisRun = "";
+    let finalizedThisRun = false;
 
     recognition.onresult = (event: any) => {
-      let interim = "";
-      let finalPart = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const r = event.results[i];
-        if (r.isFinal) finalPart += r[0].transcript;
-        else interim += r[0].transcript;
-      }
+      const result = event.results[event.results.length - 1];
+      if (!result) return;
 
-      const previousText = finalTextThisRun.trim();
-      const displayText = finalPart.trim()
-        ? finalPart.trim()
-        : `${previousText}${previousText && interim ? " " : ""}${interim}`.trim();
-      dispatch(setInterim(displayText));
+      const transcript = result[0].transcript.trim();
+      if (!transcript) return;
 
-      const currentWords = extractWords(displayText);
+      dispatch(setInterim(transcript));
+
+      const currentWords = extractWords(transcript);
       const elapsed = (performance.now() - startedAtRef.current) / 1000;
       const newWords: WordTiming[] = [];
       for (let i = 0; i < currentWords.length; i++) {
@@ -290,13 +285,15 @@ export function useGameEngine() {
       }
       wordsRef.current = newWords;
       knownWordsRef.current = currentWords;
-      if (finalPart.trim()) {
-        const normalizedFinal = finalPart.trim();
+
+      if (result.isFinal) {
+        const normalizedFinal = transcript;
         log("sst", "final", normalizedFinal);
-        if (previousText) {
-          finalizeSentence(previousText);
+        if (!finalizedThisRun) {
+          finalizedThisRun = true;
+          finalTextThisRun = normalizedFinal;
+          finalizeSentence(normalizedFinal);
         }
-        finalTextThisRun = normalizedFinal;
       }
     };
 
