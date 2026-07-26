@@ -10,6 +10,7 @@ import {
   setStatus,
   setMicLevel,
   setError,
+  setStaleText,
 } from "@/store/slices/session";
 import { addSentence, sentenceAddedToHistory, Sentence, WordTiming } from "@/store/slices/sentences";
 import { appendLog } from "@/store/slices/log";
@@ -298,6 +299,8 @@ export function useGameEngine() {
         finalizedThisRun = true;
         const normalizedFinal = transcript;
         log("sst", "final", normalizedFinal);
+        dispatch(setStaleText(normalizedFinal));
+        dispatch(setInterim(""));
         finalizeSentence(normalizedFinal);
         dispatch(clearBoard());
         wordsRef.current = [];

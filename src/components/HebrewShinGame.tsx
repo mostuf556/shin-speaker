@@ -98,6 +98,7 @@ export function HebrewShinGame() {
   const active = useAppSelector((s) => s.session.active);
   const recording = useAppSelector((s) => s.session.recording);
   const interimText = useAppSelector((s) => s.session.interimText);
+  const staleText = useAppSelector((s) => s.session.staleText);
   const highlight = useAppSelector((s) => s.session.highlight);
   const status = useAppSelector((s) => s.session.status);
   const micLevel = useAppSelector((s) => s.session.micLevel);
@@ -208,9 +209,9 @@ export function HebrewShinGame() {
           <div
             id="main_board"
             data-testid="main_board"
-            className="text-4xl font-semibold text-center leading-relaxed"
+            className={`text-4xl font-semibold text-center leading-relaxed ${!interimText && staleText ? "text-muted-foreground" : ""}`}
           >
-            {interimText || (
+            {interimText || staleText || (
               <span className="text-muted-foreground text-xl">
                 {active
                   ? recording

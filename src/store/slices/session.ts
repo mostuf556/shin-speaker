@@ -18,6 +18,7 @@ interface SessionState {
   active: boolean;
   recording: boolean;
   interimText: string;
+  staleText: string;
   playingSentenceId: string | null;
   playbackCurrentTime: number;
   highlight: { source: "playback" | "tts"; sentenceId: string; wordIndex: number } | null;
@@ -30,6 +31,7 @@ const initialState: SessionState = {
   active: false,
   recording: false,
   interimText: "",
+  staleText: "",
   playingSentenceId: null,
   playbackCurrentTime: 0,
   highlight: null,
@@ -53,6 +55,9 @@ const slice = createSlice({
     },
     clearBoard(state) {
       state.interimText = "";
+    },
+    setStaleText(state, a: PayloadAction<string>) {
+      state.staleText = a.payload;
     },
     setPlayback(
       state,
@@ -91,6 +96,7 @@ export const {
   setRecording,
   setInterim,
   clearBoard,
+  setStaleText,
   setPlayback,
   setHighlight,
   setStatus,
