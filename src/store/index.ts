@@ -7,7 +7,7 @@ import logReducer, { appendLog } from "./slices/log";
 
 const loggingMiddleware: Middleware = (store) => (next) => (action: any) => {
   const result = next(action);
-  if (action?.type && !action.type.startsWith("log/")) {
+  if (action?.type && !action.type.startsWith("log/") && action.type !== "session/setMicLevel") {
     store.dispatch(
       appendLog({
         tag: "redux",
