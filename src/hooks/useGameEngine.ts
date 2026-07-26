@@ -39,6 +39,8 @@ export function useGameEngine() {
   const wordsRef = useRef<WordTiming[]>([]);
   const knownWordsRef = useRef<string[]>([]);
   const loopingRef = useRef(false);
+  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const consecutiveRestartsRef = useRef(0);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const ttsPlaybackRef = useRef<HTMLAudioElement | null>(null);
   const boardClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -248,6 +250,8 @@ export function useGameEngine() {
     mr.onstop = () => {
       const durationMs = performance.now() - startedAtRef.current;
       log("recorder", "stopped", { durationMs });
+      // A successful stop with a real recording resets the restart counter.
+      if (durationMs > 1000) consecutiveRestartsRef.current = 0;
     };
 
     const recognition = new SR();
@@ -286,13 +290,8 @@ export function useGameEngine() {
     recognition.onerror = (e: any) => {
       const kind = e?.error || String(e);
       log("sst", "error", kind);
-      // "no-speech" and "aborted" are recoverable — restart the loop.
+      // "no-speech" and "aborted" are recoverable — let onend handle the restart.
       if (kind === "no-speech" || kind === "aborted") {
-        try {
-          recognition.stop();
-        } catch {
-          /* noop */
-        }
         return;
       }
       reportError(`Speech recognition error: ${kind}`);
@@ -309,10 +308,19 @@ export function useGameEngine() {
         stream.getTracks().forEach((t) => t.stop());
         stopMeter();
         dispatch(setRecording(false));
-        // small backoff before next iteration
-        setTimeout(() => {
+        consecutiveRestartsRef.current += 1;
+        // exponential backoff with jitter to avoid tight restart loops
+        const base = Math.min(30000, 200 * 2 ** consecutiveRestartsRef.current);
+        const backoff = base + Math.random() * 200;
+        if (consecutiveRestartsRef.current > 8) {
+          reportError("Speech recognition keeps aborting. Stopping the session.");
+          dispatch(setActive(false));
+          return;
+        }
+        restartTimerRef.current = setTimeout(() => {
+          restartTimerRef.current = null;
           if (loopingRef.current) startIteration();
-        }, 200);
+        }, backoff);
       }
     };
 
@@ -395,6 +403,11 @@ export function useGameEngine() {
   const stop = useCallback(() => {
     loopingRef.current = false;
     activeRef.current = false;
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+    consecutiveRestartsRef.current = 0;
     dispatch(setActive(false));
     dispatch(setStatus("idle"));
     stopRecording();
@@ -522,6 +535,11 @@ export function useGameEngine() {
     return () => {
       loopingRef.current = false;
       activeRef.current = false;
+      if (restartTimerRef.current) {
+        clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = null;
+      }
+      consecutiveRestartsRef.current = 0;
       try {
         recognitionRef.current?.stop();
       } catch {
