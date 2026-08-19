@@ -248,7 +248,8 @@ export function useGameEngine() {
     streamRef.current = stream;
     startMeter(stream);
 
-    const mr = new MediaRecorder(stream);
+    const shouldRecordAudio = settingsRef.current.recordAudio;
+    const mr = shouldRecordAudio ? new MediaRecorder(stream) : null;
     mediaRecorderRef.current = mr;
     chunksRef.current = [];
     startedAtRef.current = performance.now();
@@ -256,16 +257,18 @@ export function useGameEngine() {
     knownWordsRef.current = [];
     currentSentenceRef.current = "";
 
-    mr.ondataavailable = (e) => {
-      if (e.data.size > 0) chunksRef.current.push(e.data);
-    };
+    if (mr) {
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
 
-    mr.onstop = () => {
-      const durationMs = performance.now() - startedAtRef.current;
-      log("recorder", "stopped", { durationMs });
-      // A successful stop with a real recording resets the restart counter.
-      if (durationMs > 1000) consecutiveRestartsRef.current = 0;
-    };
+      mr.onstop = () => {
+        const durationMs = performance.now() - startedAtRef.current;
+        log("recorder", "stopped", { durationMs });
+        // A successful stop with a real recording resets the restart counter.
+        if (durationMs > 1000) consecutiveRestartsRef.current = 0;
+      };
+    }
 
     const recognition = new SR();
     recognitionRef.current = recognition;
@@ -285,7 +288,10 @@ export function useGameEngine() {
       const result = event.results[event.results.length - 1];
       if (!result) return;
 
-      const transcript = result[0].transcript.trim();
+      const transcript = Array.from(event.results as ArrayLike<any>)
+        .map((item: any) => item[0]?.transcript ?? "")
+        .join(" ")
+        .trim();
       if (!transcript) return;
 
       currentSentenceRef.current = transcript;
@@ -340,7 +346,7 @@ export function useGameEngine() {
         return;
       }
       try {
-        if (mr.state !== "inactive") mr.stop();
+        if (mr && mr.state !== "inactive") mr.stop();
       } catch {
         /* noop */
       }
@@ -372,10 +378,13 @@ export function useGameEngine() {
 
       const finishAndProcess = () => {
         const durationMs = performance.now() - startedAtRef.current;
-        const blob = new Blob(chunksRef.current, {
-          type: mr.mimeType || "audio/webm",
-        });
-        const url = URL.createObjectURL(blob);
+        const url = mr
+          ? URL.createObjectURL(
+              new Blob(chunksRef.current, {
+                type: mr.mimeType || "audio/webm",
+              }),
+            )
+          : null;
         stream.getTracks().forEach((t) => t.stop());
         stopMeter();
 
@@ -420,7 +429,7 @@ export function useGameEngine() {
 
       };
 
-      if (mr.state !== "inactive") {
+      if (mr && mr.state !== "inactive") {
         mr.onstop = finishAndProcess;
         mr.stop();
       } else {
@@ -428,11 +437,11 @@ export function useGameEngine() {
       }
     };
 
-    mr.start();
+    mr?.start();
     recognition.start();
     dispatch(setRecording(true));
     dispatch(setStatus("recording"));
-    log("recorder", "started");
+    log("recorder", shouldRecordAudio ? "started" : "disabled");
     log("sst", "started");
   }, [dispatch, log, reportError, runActionsFor, startMeter, stopMeter]);
 

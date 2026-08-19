@@ -9,6 +9,8 @@ import {
   setRestartDelayMs,
   setHistoryView,
   HistoryView,
+  toggleShowInterim,
+  toggleRecordAudio,
 } from "@/store/slices/settings";
 import { clearLog } from "@/store/slices/log";
 import { clearAll, Sentence } from "@/store/slices/sentences";
@@ -299,45 +301,46 @@ export function HebrewShinGame() {
           <div
             id="main_board"
             data-testid="main_board"
-            className={`text-2xl sm:text-4xl font-semibold text-center leading-relaxed break-words ${!interimText && staleText ? "text-muted-foreground" : ""}`}
+            className={`text-2xl sm:text-4xl font-semibold text-center leading-relaxed break-words ${staleText ? "" : "text-muted-foreground"}`}
           >
-            {interimText || staleText || (
-              <span className="text-muted-foreground text-lg sm:text-xl">
-                {active
-                  ? recording
-                    ? "🎤 מקליט..."
-                    : status === "waiting"
-                      ? "⏳ ממתין למשפט הבא..."
-                      : "מעבד..."
-                  : "לחץ 'התחל' כדי להתחיל"}
-              </span>
-            )}
+            {staleText}
+          </div>
+        </section>
+
+        <section
+          data-testid="input-status-panel"
+          className="rounded-lg border border-border bg-card p-3 sm:p-4"
+        >
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="font-semibold text-sm">מצב קלט</h2>
+            <span className="text-xs text-muted-foreground">
+              {recording ? "מקליט" : "לא מקליט"}
+            </span>
           </div>
           <MicMeter level={micLevel} recording={recording} />
         </section>
 
-        <section
-          data-testid="spoken-speech-panel"
-          className="rounded-lg border border-border bg-card p-3 sm:p-4"
-        >
-          <div className="flex items-center justify-between mb-1">
-            <h2 className="font-semibold text-sm">הדיבור שזוהה</h2>
-            <span
-              className="text-xs text-muted-foreground"
-              data-testid="spoken-speech-source"
-            >
-              {interimText ? "בזמן אמת" : staleText ? "משפט אחרון" : "—"}
-            </span>
-          </div>
-          <p
-            data-testid="spoken-speech-text"
-            className="text-lg sm:text-2xl leading-relaxed break-words"
+        {settings.showInterim && (
+          <section
+            data-testid="spoken-speech-panel"
+            className="rounded-lg border border-border bg-card p-3 sm:p-4"
           >
-            {interimText || staleText || (
-              <span className="text-muted-foreground text-base">אין דיבור עדיין</span>
-            )}
-          </p>
-        </section>
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="font-semibold text-sm">דיבור ביניים (ניפוי שגיאות)</h2>
+              <span className="text-xs text-muted-foreground" data-testid="spoken-speech-source">
+                {interimText ? "בזמן אמת" : "—"}
+              </span>
+            </div>
+            <p
+              data-testid="spoken-speech-text"
+              className="text-lg sm:text-2xl leading-relaxed break-words"
+            >
+              {interimText || (
+                <span className="text-muted-foreground text-base">אין דיבור ביניים עדיין</span>
+              )}
+            </p>
+          </section>
+        )}
 
         <div className="grid md:grid-cols-2 gap-4 sm:gap-6">
           <SettingsPanel />
@@ -662,6 +665,24 @@ function SettingsPanel() {
       <div className="text-xs text-muted-foreground" data-testid="lang-info">
         SST: {settings.sstLang} · TTS: {settings.ttsLang}
       </div>
+      <label className="flex items-center gap-2 text-sm cursor-pointer">
+        <input
+          data-testid="show-interim-checkbox"
+          type="checkbox"
+          checked={settings.showInterim}
+          onChange={() => dispatch(toggleShowInterim())}
+        />
+        הצג דיבור ביניים לניפוי שגיאות
+      </label>
+      <label className="flex items-center gap-2 text-sm cursor-pointer">
+        <input
+          data-testid="record-audio-checkbox"
+          type="checkbox"
+          checked={settings.recordAudio}
+          onChange={() => dispatch(toggleRecordAudio())}
+        />
+        שמור הקלטת שמע
+      </label>
       <div>
         <div className="text-sm mb-2">מנוע TTS:</div>
         <div className="flex flex-wrap gap-2" data-testid="tts-engine-toggle">

@@ -11,6 +11,8 @@ interface SettingsState {
   boardClearTimeoutMs: number;
   restartDelayMs: number;
   historyView: HistoryView;
+  showInterim: boolean;
+  recordAudio: boolean;
   sstLang: string;
   ttsLang: string;
 }
@@ -22,6 +24,8 @@ const initialState: SettingsState = {
   boardClearTimeoutMs: 1000,
   restartDelayMs: 1500,
   historyView: "expanded",
+  showInterim: true,
+  recordAudio: true,
   sstLang: "he-IL",
   ttsLang: "he-IL",
 };
@@ -61,6 +65,12 @@ const slice = createSlice({
             ? "hidden"
             : "expanded";
     },
+    toggleShowInterim(state) {
+      state.showInterim = !state.showInterim;
+    },
+    toggleRecordAudio(state) {
+      state.recordAudio = !state.recordAudio;
+    },
   },
 });
 
@@ -73,5 +83,7 @@ export const {
   setRestartDelayMs,
   setHistoryView,
   cycleHistoryView,
+  toggleShowInterim,
+  toggleRecordAudio,
 } = slice.actions;
 export default slice.reducer;
