@@ -25,7 +25,7 @@ const initialState: SettingsState = {
   restartDelayMs: 1500,
   historyView: "expanded",
   showInterim: true,
-  recordAudio: true,
+  recordAudio: false,
   sstLang: "he-IL",
   ttsLang: "he-IL",
 };
