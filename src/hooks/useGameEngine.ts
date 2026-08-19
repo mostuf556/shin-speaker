@@ -269,9 +269,15 @@ export function useGameEngine() {
 
     const recognition = new SR();
     recognitionRef.current = recognition;
-    recognition.lang = "he-IL";
+    recognition.lang = settingsRef.current.sstLang;
     recognition.continuous = false;
     recognition.interimResults = true;
+    log("sst", "lang assigned", {
+      lang: recognition.lang,
+      continuous: false,
+      interimResults: true,
+    });
+
 
     let finalizedThisRun = false;
 
