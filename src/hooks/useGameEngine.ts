@@ -236,6 +236,10 @@ export function useGameEngine() {
       dispatch(setActive(false));
       return;
     }
+    if (settingsRef.current.sstEngine !== "native") {
+      reportError(`Unsupported SST engine: ${settingsRef.current.sstEngine}`);
+      return;
+    }
 
     let stream: MediaStream;
     try {
@@ -273,12 +277,15 @@ export function useGameEngine() {
     const recognition = new SR();
     recognitionRef.current = recognition;
     recognition.lang = settingsRef.current.sstLang;
-    recognition.continuous = false;
+    recognition.continuous = true;
     recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
     log("sst", "lang assigned", {
+      engine: settingsRef.current.sstEngine,
       lang: recognition.lang,
-      continuous: false,
+      continuous: true,
       interimResults: true,
+      maxAlternatives: 1,
     });
 
 

@@ -2,12 +2,14 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 export type ActionType = "playback" | "word-tts" | "sentence-tts";
 export type TTSEngine = "native" | "api";
+export type SSTEngine = "native";
 export type HistoryView = "expanded" | "shrinked" | "hidden";
 
 interface SettingsState {
   leadInMs: number;
   actions: ActionType[];
   ttsEngine: TTSEngine;
+  sstEngine: SSTEngine;
   boardClearTimeoutMs: number;
   restartDelayMs: number;
   historyView: HistoryView;
@@ -21,6 +23,7 @@ const initialState: SettingsState = {
   leadInMs: 200,
   actions: ["playback", "word-tts", "sentence-tts"],
   ttsEngine: "api",
+  sstEngine: "native",
   boardClearTimeoutMs: 1000,
   restartDelayMs: 1500,
   historyView: "expanded",
