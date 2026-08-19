@@ -674,7 +674,7 @@ function SettingsPanel() {
         />
       </div>
       <div className="text-xs text-muted-foreground" data-testid="lang-info">
-        SST: {settings.sstLang} · TTS: {settings.ttsLang}
+        SST: {settings.sstEngine} ({settings.sstLang}) · TTS: {settings.ttsLang}
       </div>
       <label className="flex items-center gap-2 text-sm cursor-pointer">
         <input
