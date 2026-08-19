@@ -15,7 +15,7 @@ import {
 import { clearLog } from "@/store/slices/log";
 import { clearAll, Sentence } from "@/store/slices/sentences";
 import { Button } from "@/components/ui/button";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { AppStatus } from "@/store/slices/session";
 
 const ACTION_LABELS: Record<ActionType, string> = {
@@ -126,6 +126,7 @@ export function HebrewShinGame() {
   const sentences = useAppSelector((s) => s.sentences.items);
   const settings = useAppSelector((s) => s.settings);
   const logEntries = useAppSelector((s) => s.log.entries);
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
 
   const { start, stop, playRecording, playTTSHighlighted, dismissError } =
     useGameEngine();
@@ -175,18 +176,24 @@ export function HebrewShinGame() {
   const copyLog = async () => {
     const text = buildDebugReport();
     try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      try {
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand("copy");
-        document.body.removeChild(ta);
-      } catch {
-        /* ignore */
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        throw new Error("Clipboard API unavailable");
       }
+      setCopyStatus("copied");
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "true");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const copied = document.execCommand("copy");
+      document.body.removeChild(ta);
+      setCopyStatus(copied ? "copied" : "failed");
     }
   };
 
@@ -358,7 +365,11 @@ export function HebrewShinGame() {
                   variant="outline"
                   onClick={copyLog}
                 >
-                  העתק דוח
+                  {copyStatus === "copied"
+                    ? "הדוח הועתק"
+                    : copyStatus === "failed"
+                      ? "ההעתקה נכשלה"
+                      : "העתק דוח"}
                 </Button>
                 <Button
                   data-testid="log-clear"
