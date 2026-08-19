@@ -404,11 +404,20 @@ export function useGameEngine() {
             await runActionsFor(sentence);
           }
           if (errorPausedRef.current || !activeRef.current) return;
-          loopingRef.current = true;
+          const delay = settingsRef.current.restartDelayMs;
           dispatch(setRecording(false));
-          dispatch(setStatus("recording"));
-          startIteration();
+          dispatch(setStatus("waiting"));
+          log("session", "waiting before next sentence", { delayMs: delay });
+          if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+          restartTimerRef.current = setTimeout(() => {
+            restartTimerRef.current = null;
+            if (errorPausedRef.current || !activeRef.current) return;
+            loopingRef.current = true;
+            dispatch(setStatus("recording"));
+            startIteration();
+          }, delay);
         })();
+
       };
 
       if (mr.state !== "inactive") {
