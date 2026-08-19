@@ -56,7 +56,7 @@ export function useGameEngine() {
         appendLog({
           tag,
           message,
-          data: data !== undefined ? JSON.stringify(data).slice(0, 200) : undefined,
+          data: data !== undefined ? JSON.stringify(data).slice(0, 1000) : undefined,
         }),
       );
     },
@@ -253,7 +253,19 @@ export function useGameEngine() {
     startMeter(stream);
 
     const shouldRecordAudio = settingsRef.current.recordAudio;
-    const mr = shouldRecordAudio ? new MediaRecorder(stream) : null;
+    let mr: MediaRecorder | null = null;
+    if (shouldRecordAudio) {
+      try {
+        mr = new MediaRecorder(stream);
+      } catch (e: any) {
+        log("recorder", "unavailable", { message: e?.message ?? String(e) });
+        reportError(`Audio recording could not start: ${e?.message ?? e}`, e);
+        stream.getTracks().forEach((t) => t.stop());
+        stopMeter();
+        dispatch(setActive(false));
+        return;
+      }
+    }
     mediaRecorderRef.current = mr;
     chunksRef.current = [];
     startedAtRef.current = performance.now();
@@ -288,18 +300,51 @@ export function useGameEngine() {
       maxAlternatives: 1,
     });
 
+    const logRecognitionEvent = (eventName: string, data?: unknown) => {
+      log("sst", eventName, data);
+    };
+
+    recognition.onstart = () => logRecognitionEvent("start");
+    recognition.onaudiostart = () => logRecognitionEvent("audio-start");
+    recognition.onaudioend = () => logRecognitionEvent("audio-end");
+    recognition.onsoundstart = () => logRecognitionEvent("sound-start");
+    recognition.onsoundend = () => logRecognitionEvent("sound-end");
+    recognition.onspeechstart = () => logRecognitionEvent("speech-start");
+    recognition.onspeechend = () => logRecognitionEvent("speech-end");
+    recognition.onnomatch = (event: any) =>
+      logRecognitionEvent("no-match", {
+        type: event?.type,
+        timeStamp: event?.timeStamp,
+      });
 
     let finalizedThisRun = false;
 
     recognition.onresult = (event: any) => {
       const result = event.results[event.results.length - 1];
+      logRecognitionEvent("result-received", {
+        resultIndex: event.resultIndex,
+        resultCount: event.results.length,
+        latestIsFinal: result?.isFinal ?? false,
+        alternatives: result
+          ? Array.from(result).map((alternative: any) => ({
+              transcript: alternative.transcript,
+              confidence: alternative.confidence,
+            }))
+          : [],
+      });
       if (!result) return;
 
       const transcript = Array.from(event.results as ArrayLike<any>)
         .map((item: any) => item[0]?.transcript ?? "")
         .join(" ")
         .trim();
-      if (!transcript) return;
+      if (!transcript) {
+        logRecognitionEvent("no-transcript", {
+          resultIndex: event.resultIndex,
+          resultCount: event.results.length,
+        });
+        return;
+      }
 
       currentSentenceRef.current = transcript;
 
@@ -339,7 +384,13 @@ export function useGameEngine() {
 
     recognition.onerror = (e: any) => {
       const kind = e?.error || String(e);
-      log("sst", "error", kind);
+      log("sst", "error", {
+        kind,
+        message: e?.message,
+        type: e?.type,
+        timeStamp: e?.timeStamp,
+        recoverable: kind === "no-speech" || kind === "aborted",
+      });
       // "no-speech" and "aborted" are recoverable — let onend handle the restart.
       if (kind === "no-speech" || kind === "aborted") {
         return;
@@ -347,7 +398,10 @@ export function useGameEngine() {
       reportError(`Speech recognition error: ${kind}`);
     };
     recognition.onend = () => {
-      log("sst", "end");
+      log("sst", "end", {
+        finalized: finalizedThisRun,
+        hasTranscript: Boolean(currentSentenceRef.current),
+      });
       if (!loopingRef.current || errorPausedRef.current || !activeRef.current) return;
       if (finalizedThisRun) {
         return;
@@ -361,6 +415,7 @@ export function useGameEngine() {
         finalizeSentence(normalizedFinal);
         return;
       }
+      log("sst", "no-result", { reason: "recognition-ended-without-transcript" });
       try {
         if (mr && mr.state !== "inactive") mr.stop();
       } catch {
@@ -377,6 +432,7 @@ export function useGameEngine() {
         dispatch(setActive(false));
         return;
       }
+      log("sst", "restart-scheduled", { backoffMs: Math.round(backoff) });
       restartTimerRef.current = setTimeout(() => {
         restartTimerRef.current = null;
         if (loopingRef.current) startIteration();
