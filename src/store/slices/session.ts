@@ -3,11 +3,13 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 export type AppStatus =
   | "idle"
   | "recording"
+  | "waiting"
   | "tts-word"
   | "tts-sentence"
   | "playback-in-game"
   | "playback-out-of-game"
   | "error";
+
 
 export interface AppError {
   message: string;

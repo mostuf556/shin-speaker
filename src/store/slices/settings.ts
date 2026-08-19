@@ -2,12 +2,17 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 export type ActionType = "playback" | "word-tts" | "sentence-tts";
 export type TTSEngine = "native" | "api";
+export type HistoryView = "expanded" | "shrinked" | "hidden";
 
 interface SettingsState {
   leadInMs: number;
   actions: ActionType[];
   ttsEngine: TTSEngine;
   boardClearTimeoutMs: number;
+  restartDelayMs: number;
+  historyView: HistoryView;
+  sstLang: string;
+  ttsLang: string;
 }
 
 const initialState: SettingsState = {
@@ -15,6 +20,10 @@ const initialState: SettingsState = {
   actions: ["playback", "word-tts", "sentence-tts"],
   ttsEngine: "api",
   boardClearTimeoutMs: 1000,
+  restartDelayMs: 1500,
+  historyView: "expanded",
+  sstLang: "he-IL",
+  ttsLang: "he-IL",
 };
 
 const slice = createSlice({
@@ -38,6 +47,20 @@ const slice = createSlice({
     setBoardClearTimeoutMs(state, a: PayloadAction<number>) {
       state.boardClearTimeoutMs = a.payload;
     },
+    setRestartDelayMs(state, a: PayloadAction<number>) {
+      state.restartDelayMs = a.payload;
+    },
+    setHistoryView(state, a: PayloadAction<HistoryView>) {
+      state.historyView = a.payload;
+    },
+    cycleHistoryView(state) {
+      state.historyView =
+        state.historyView === "expanded"
+          ? "shrinked"
+          : state.historyView === "shrinked"
+            ? "hidden"
+            : "expanded";
+    },
   },
 });
 
@@ -47,5 +70,8 @@ export const {
   setActions,
   setTTSEngine,
   setBoardClearTimeoutMs,
+  setRestartDelayMs,
+  setHistoryView,
+  cycleHistoryView,
 } = slice.actions;
 export default slice.reducer;
