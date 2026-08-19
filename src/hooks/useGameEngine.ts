@@ -345,6 +345,15 @@ export function useGameEngine() {
       if (finalizedThisRun) {
         return;
       }
+      if (currentSentenceRef.current) {
+        finalizedThisRun = true;
+        const normalizedFinal = currentSentenceRef.current;
+        log("sst", "final-from-end", normalizedFinal);
+        dispatch(setStaleText(normalizedFinal));
+        dispatch(setInterim(""));
+        finalizeSentence(normalizedFinal);
+        return;
+      }
       try {
         if (mr && mr.state !== "inactive") mr.stop();
       } catch {
@@ -437,8 +446,22 @@ export function useGameEngine() {
       }
     };
 
-    mr?.start();
-    recognition.start();
+    try {
+      mr?.start();
+      recognition.start();
+    } catch (e: any) {
+      log("sst", "start failed", e?.message ?? e);
+      try {
+        if (mr && mr.state !== "inactive") mr.stop();
+      } catch {
+        /* noop */
+      }
+      stream.getTracks().forEach((t) => t.stop());
+      stopMeter();
+      dispatch(setRecording(false));
+      reportError(`Speech recognition could not start: ${e?.message ?? e}`, e);
+      return;
+    }
     dispatch(setRecording(true));
     dispatch(setStatus("recording"));
     log("recorder", shouldRecordAudio ? "started" : "disabled");
