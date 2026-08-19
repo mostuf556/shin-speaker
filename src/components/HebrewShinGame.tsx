@@ -6,6 +6,9 @@ import {
   ActionType,
   setTTSEngine,
   setBoardClearTimeoutMs,
+  setRestartDelayMs,
+  setHistoryView,
+  HistoryView,
 } from "@/store/slices/settings";
 import { clearLog } from "@/store/slices/log";
 import { clearAll, Sentence } from "@/store/slices/sentences";
@@ -22,6 +25,7 @@ const ACTION_LABELS: Record<ActionType, string> = {
 const STATUS_LABELS: Record<AppStatus, string> = {
   idle: "בהמתנה",
   recording: "מקליט",
+  waiting: "השהיה לפני משפט הבא",
   "tts-word": "TTS מילה",
   "tts-sentence": "TTS משפט",
   "playback-in-game": "השמעה (במשחק)",
@@ -29,10 +33,11 @@ const STATUS_LABELS: Record<AppStatus, string> = {
   error: "שגיאה",
 };
 
-// Semantic status → background tint (uses design tokens via inline oklch mix)
+// Semantic status → background tint
 const STATUS_BG: Record<AppStatus, string> = {
   idle: "bg-background",
   recording: "bg-rose-50 dark:bg-rose-950/40",
+  waiting: "bg-amber-50 dark:bg-amber-950/40",
   "tts-word": "bg-violet-50 dark:bg-violet-950/40",
   "tts-sentence": "bg-indigo-50 dark:bg-indigo-950/40",
   "playback-in-game": "bg-emerald-50 dark:bg-emerald-950/40",
@@ -40,52 +45,65 @@ const STATUS_BG: Record<AppStatus, string> = {
   error: "bg-red-100 dark:bg-red-950/60",
 };
 
-const STATUS_COLUMNS = [
-  { key: "idle", label: "idle" },
-  { key: "playing", label: "playing" },
-  { key: "recording", label: "recording" },
-  { key: "error", label: "error" },
-] as const;
+const STATUS_CHIP: Record<AppStatus, { on: string; off: string }> = {
+  idle: {
+    on: "border-slate-500 bg-slate-500 text-white",
+    off: "border-border bg-card text-muted-foreground",
+  },
+  recording: {
+    on: "border-rose-500 bg-rose-500 text-white",
+    off: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-300",
+  },
+  waiting: {
+    on: "border-amber-500 bg-amber-500 text-white",
+    off: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300",
+  },
+  "tts-word": {
+    on: "border-violet-500 bg-violet-500 text-white",
+    off: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900/40 dark:bg-violet-950/30 dark:text-violet-300",
+  },
+  "tts-sentence": {
+    on: "border-indigo-500 bg-indigo-500 text-white",
+    off: "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-900/40 dark:bg-indigo-950/30 dark:text-indigo-300",
+  },
+  "playback-in-game": {
+    on: "border-emerald-500 bg-emerald-500 text-white",
+    off: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300",
+  },
+  "playback-out-of-game": {
+    on: "border-teal-500 bg-teal-500 text-white",
+    off: "border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-900/40 dark:bg-teal-950/30 dark:text-teal-300",
+  },
+  error: {
+    on: "border-red-500 bg-red-500 text-white",
+    off: "border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300",
+  },
+};
+
+const ALL_STATUSES = Object.keys(STATUS_LABELS) as AppStatus[];
 
 function AppStatusVisualizer({ status }: { status: AppStatus }) {
-  const column =
-    status === "error"
-      ? "error"
-      : status === "recording"
-        ? "recording"
-        : status === "idle"
-          ? "idle"
-          : "playing";
-
   return (
-    <div className="flex items-center gap-2" aria-label="app-status-visualizer">
-      {STATUS_COLUMNS.map((item) => {
-        const active = column === item.key;
-        const baseClass =
-          "min-w-20 rounded-md border px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-wide transition-colors";
-        const activeClass =
-          item.key === "error"
-            ? "border-red-500 bg-red-500 text-white"
-            : item.key === "recording"
-              ? "border-rose-500 bg-rose-500 text-white"
-              : item.key === "playing"
-                ? "border-emerald-500 bg-emerald-500 text-white"
-                : "border-border bg-background text-foreground";
-        const inactiveClass =
-          item.key === "error"
-            ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300"
-            : item.key === "recording"
-              ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-300"
-              : item.key === "playing"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300"
-                : "border-border bg-card text-muted-foreground";
-
+    <div
+      className="flex flex-wrap items-center gap-1.5"
+      data-testid="app-status-visualizer"
+      data-current-status={status}
+      aria-label="app-status-visualizer"
+    >
+      {ALL_STATUSES.map((s) => {
+        const active = s === status;
         return (
           <div
-            key={item.key}
-            className={`${baseClass} ${active ? activeClass : inactiveClass}`}
+            key={s}
+            data-testid={`status-chip-${s}`}
+            data-active={active ? "true" : "false"}
+            className={`rounded-md border px-2 py-1 text-[10px] sm:text-[11px] font-semibold tracking-wide transition-all ${
+              active
+                ? `${STATUS_CHIP[s].on} scale-105 shadow-sm`
+                : `${STATUS_CHIP[s].off} opacity-70`
+            }`}
           >
-            {item.label}
+            {STATUS_LABELS[s]}
           </div>
         );
       })}
@@ -112,61 +130,133 @@ export function HebrewShinGame() {
 
   const orderedLog = useMemo(() => [...logEntries].reverse(), [logEntries]);
 
+  // Debug bundle: state snapshot + detected sentences + log lines.
+  const buildDebugReport = () => {
+    const lines: string[] = [];
+    lines.push(`=== SHIN TRAINER DEBUG REPORT @ ${new Date().toISOString()} ===`);
+    lines.push(
+      `state: status=${status} active=${active} recording=${recording} micLevel=${micLevel.toFixed(3)}`,
+    );
+    lines.push(`board: interim="${interimText}" stale="${staleText}"`);
+    lines.push(`error: ${error ? error.message : "none"}`);
+    lines.push(
+      `settings: ${JSON.stringify({
+        ...settings,
+      })}`,
+    );
+    lines.push("");
+    lines.push(`=== DETECTED SENTENCES (${sentences.length}) ===`);
+    if (sentences.length === 0) lines.push("(none)");
+    sentences.forEach((s, i) => {
+      lines.push(
+        `#${i + 1} id=${s.id} at=${new Date(s.createdAt).toISOString()} dur=${(
+          s.durationMs / 1000
+        ).toFixed(2)}s shin=${s.containsShin} audio=${s.audioUrl ? "yes" : "no"}`,
+      );
+      lines.push(`   text: ${s.text}`);
+      lines.push(
+        `   words: ${s.words.map((w) => `${w.word}@${w.time.toFixed(2)}s`).join(" | ")}`,
+      );
+    });
+    lines.push("");
+    lines.push(`=== EVENT LOG (${logEntries.length}) ===`);
+    logEntries.forEach((e) => {
+      lines.push(
+        `${new Date(e.time).toISOString()} [${e.tag}] ${e.message}${
+          e.data ? " " + e.data : ""
+        }${e.count > 1 ? ` (x${e.count})` : ""}`,
+      );
+    });
+    return lines.join("\n");
+  };
+
   const copyLog = async () => {
-    const text = logEntries
-      .map(
-        (e) =>
-          `${new Date(e.time).toISOString()} [${e.tag}] ${e.message}${
-            e.data ? " " + e.data : ""
-          }${e.count > 1 ? ` (x${e.count})` : ""}`,
-      )
-      .join("\n");
+    const text = buildDebugReport();
     try {
       await navigator.clipboard.writeText(text);
     } catch {
-      /* ignore */
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      } catch {
+        /* ignore */
+      }
     }
   };
+
+  const historyView = settings.historyView;
 
   return (
     <div
       dir="rtl"
       data-testid="hebrew-shin-game"
       data-status={status}
-      className={`min-h-screen text-foreground p-6 transition-colors duration-300 ${STATUS_BG[status]}`}
+      className={`min-h-screen text-foreground p-3 sm:p-6 transition-colors duration-300 ${STATUS_BG[status]}`}
     >
-      <div className="max-w-6xl mx-auto space-y-6">
-        <header className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold" data-testid="app-title">
-              לימוד הגיית האות ש
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              לחץ "התחל", דבר משפט המכיל את האות ש
-            </p>
+      <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6">
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1
+                className="text-2xl sm:text-3xl font-bold"
+                data-testid="app-title"
+              >
+                לימוד הגיית האות ש
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                לחץ "התחל", דבר משפט המכיל את האות ש
+              </p>
+            </div>
+            <div className="shrink-0 sm:hidden">
+              {!active ? (
+                <Button
+                  data-testid="start-button-mobile"
+                  onClick={start}
+                  size="lg"
+                  disabled={!!error}
+                >
+                  התחל
+                </Button>
+              ) : (
+                <Button
+                  data-testid="stop-button-mobile"
+                  onClick={stop}
+                  variant="destructive"
+                  size="lg"
+                >
+                  עצור
+                </Button>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
             <AppStatusVisualizer status={status} />
-            {!active ? (
-              <Button
-                data-testid="start-button"
-                onClick={start}
-                size="lg"
-                className="text-lg"
-                disabled={!!error}
-              >
-                התחל
-              </Button>
-            ) : (
-              <Button
-                data-testid="stop-button"
-                onClick={stop}
-                variant="destructive"
-                size="lg"
-              >
-                עצור
-              </Button>
-            )}
+            <div className="hidden sm:block">
+              {!active ? (
+                <Button
+                  data-testid="start-button"
+                  onClick={start}
+                  size="lg"
+                  className="text-lg"
+                  disabled={!!error}
+                >
+                  התחל
+                </Button>
+              ) : (
+                <Button
+                  data-testid="stop-button"
+                  onClick={stop}
+                  variant="destructive"
+                  size="lg"
+                >
+                  עצור
+                </Button>
+              )}
+            </div>
           </div>
         </header>
 
@@ -179,7 +269,7 @@ export function HebrewShinGame() {
             <div className="font-bold text-red-700 dark:text-red-300">
               Error — waiting for confirmation to continue
             </div>
-            <div data-testid="error-message" className="font-mono text-sm">
+            <div data-testid="error-message" className="font-mono text-sm break-words">
               {error.message}
             </div>
             {error.stack && (
@@ -204,19 +294,21 @@ export function HebrewShinGame() {
 
         <section
           data-testid="main-board-section"
-          className="rounded-lg border-2 border-dashed border-border p-8 min-h-40 flex flex-col items-center justify-center bg-card gap-4"
+          className="rounded-lg border-2 border-dashed border-border p-4 sm:p-8 min-h-40 flex flex-col items-center justify-center bg-card gap-4"
         >
           <div
             id="main_board"
             data-testid="main_board"
-            className={`text-4xl font-semibold text-center leading-relaxed ${!interimText && staleText ? "text-muted-foreground" : ""}`}
+            className={`text-2xl sm:text-4xl font-semibold text-center leading-relaxed break-words ${!interimText && staleText ? "text-muted-foreground" : ""}`}
           >
             {interimText || staleText || (
-              <span className="text-muted-foreground text-xl">
+              <span className="text-muted-foreground text-lg sm:text-xl">
                 {active
                   ? recording
                     ? "🎤 מקליט..."
-                    : "מעבד..."
+                    : status === "waiting"
+                      ? "⏳ ממתין למשפט הבא..."
+                      : "מעבד..."
                   : "לחץ 'התחל' כדי להתחיל"}
               </span>
             )}
@@ -224,14 +316,37 @@ export function HebrewShinGame() {
           <MicMeter level={micLevel} recording={recording} />
         </section>
 
-        <div className="grid md:grid-cols-2 gap-6">
+        <section
+          data-testid="spoken-speech-panel"
+          className="rounded-lg border border-border bg-card p-3 sm:p-4"
+        >
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="font-semibold text-sm">הדיבור שזוהה</h2>
+            <span
+              className="text-xs text-muted-foreground"
+              data-testid="spoken-speech-source"
+            >
+              {interimText ? "בזמן אמת" : staleText ? "משפט אחרון" : "—"}
+            </span>
+          </div>
+          <p
+            data-testid="spoken-speech-text"
+            className="text-lg sm:text-2xl leading-relaxed break-words"
+          >
+            {interimText || staleText || (
+              <span className="text-muted-foreground text-base">אין דיבור עדיין</span>
+            )}
+          </p>
+        </section>
+
+        <div className="grid md:grid-cols-2 gap-4 sm:gap-6">
           <SettingsPanel />
 
           <section
             data-testid="log-panel"
-            className="rounded-lg border border-border p-4 bg-card"
+            className="rounded-lg border border-border p-3 sm:p-4 bg-card"
           >
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-2 gap-2">
               <h2 className="font-semibold">יומן אירועים</h2>
               <div className="flex gap-2">
                 <Button
@@ -240,7 +355,7 @@ export function HebrewShinGame() {
                   variant="outline"
                   onClick={copyLog}
                 >
-                  העתק
+                  העתק דוח
                 </Button>
                 <Button
                   data-testid="log-clear"
@@ -253,7 +368,7 @@ export function HebrewShinGame() {
               </div>
             </div>
             <div
-              className="h-64 overflow-y-auto font-mono text-xs space-y-0.5 bg-muted/40 rounded p-2"
+              className="h-56 sm:h-64 overflow-y-auto font-mono text-[10px] sm:text-xs space-y-0.5 bg-muted/40 rounded p-2"
               dir="ltr"
             >
               {orderedLog.map((e) => (
@@ -264,7 +379,7 @@ export function HebrewShinGame() {
                   <span className="font-bold" style={{ color: tagColor(e.tag) }}>
                     [{e.tag}]
                   </span>
-                  <span className="flex-1">
+                  <span className="flex-1 break-all">
                     {e.message}
                     {e.data ? ` ${e.data}` : ""}
                   </span>
@@ -282,44 +397,93 @@ export function HebrewShinGame() {
           </section>
         </div>
 
-        <section data-testid="history-section" className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">היסטוריית משפטים</h2>
-            {sentences.length > 0 && (
-              <Button
-                data-testid="clear-history"
-                size="sm"
-                variant="outline"
-                onClick={() => dispatch(clearAll())}
-              >
-                נקה הכל
-              </Button>
-            )}
+        <section data-testid="history-section" data-view={historyView} className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg sm:text-xl font-semibold">
+              היסטוריית משפטים ({sentences.length})
+            </h2>
+            <div className="flex flex-wrap gap-1.5" data-testid="history-view-toggle">
+              {(
+                [
+                  ["expanded", "מורחב"],
+                  ["shrinked", "מוקטן"],
+                  ["hidden", "מוסתר"],
+                ] as [HistoryView, string][]
+              ).map(([v, label]) => (
+                <Button
+                  key={v}
+                  data-testid={`history-view-${v}`}
+                  size="sm"
+                  variant={historyView === v ? "default" : "outline"}
+                  onClick={() => dispatch(setHistoryView(v))}
+                >
+                  {label}
+                </Button>
+              ))}
+              {sentences.length > 0 && (
+                <Button
+                  data-testid="clear-history"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => dispatch(clearAll())}
+                >
+                  נקה הכל
+                </Button>
+              )}
+            </div>
           </div>
-          {sentences.length === 0 && (
+
+          {historyView !== "hidden" && sentences.length === 0 && (
             <p className="text-sm text-muted-foreground">אין משפטים עדיין</p>
           )}
-          <ul className="space-y-2">
-            {sentences.map((s) => (
-              <SentenceRow
-                key={s.id}
-                sentence={s}
-                onPlay={() => playRecording(s, 0)}
-                onPlayFromWord={(idx) => {
-                  const w = s.words[idx];
-                  const from = Math.max(0, w.time - settings.leadInMs / 1000);
-                  playRecording(s, from);
-                }}
-                onTTS={() => playTTSHighlighted(s)}
-                highlightedWord={
-                  highlight?.sentenceId === s.id ? highlight.wordIndex : -1
-                }
-                highlightSource={
-                  highlight?.sentenceId === s.id ? highlight.source : null
-                }
-              />
-            ))}
-          </ul>
+
+          {historyView === "hidden" ? null : historyView === "shrinked" ? (
+            <ul className="space-y-1" data-testid="history-list-shrinked">
+              {sentences.map((s) => (
+                <li
+                  key={s.id}
+                  data-testid={`sentence-compact-${s.id}`}
+                  className="flex items-center gap-2 rounded-md border border-border bg-card px-2 py-1.5 text-sm"
+                >
+                  <Button
+                    data-testid={`sentence-play-${s.id}`}
+                    size="sm"
+                    className="h-7 px-2"
+                    onClick={() => playRecording(s, 0)}
+                    disabled={!s.audioUrl}
+                  >
+                    ▶
+                  </Button>
+                  <span className="flex-1 truncate">{s.text}</span>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {s.containsShin ? "ש ✓" : "—"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <ul className="space-y-2" data-testid="history-list-expanded">
+              {sentences.map((s) => (
+                <SentenceRow
+                  key={s.id}
+                  sentence={s}
+                  onPlay={() => playRecording(s, 0)}
+                  onPlayFromWord={(idx) => {
+                    const w = s.words[idx];
+                    const from = Math.max(0, w.time - settings.leadInMs / 1000);
+                    playRecording(s, from);
+                  }}
+                  onTTS={() => playTTSHighlighted(s)}
+                  highlightedWord={
+                    highlight?.sentenceId === s.id ? highlight.wordIndex : -1
+                  }
+                  highlightSource={
+                    highlight?.sentenceId === s.id ? highlight.source : null
+                  }
+                />
+              ))}
+            </ul>
+          )}
         </section>
       </div>
     </div>
@@ -383,7 +547,7 @@ function SentenceRow({
         sentence.containsShin ? "border-primary/60" : "border-border"
       }`}
     >
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1 shrink-0">
         <Button
           data-testid={`sentence-play-${sentence.id}`}
           size="sm"
@@ -401,8 +565,8 @@ function SentenceRow({
           TTS
         </Button>
       </div>
-      <div className="flex-1">
-        <div className="text-xl leading-relaxed flex flex-wrap gap-x-2 gap-y-1">
+      <div className="flex-1 min-w-0">
+        <div className="text-lg sm:text-xl leading-relaxed flex flex-wrap gap-x-2 gap-y-1">
           {sentence.words.length > 0
             ? sentence.words.map((w, i) => {
                 const isHi = i === highlightedWord;
@@ -445,7 +609,7 @@ function SettingsPanel() {
   return (
     <section
       data-testid="settings-panel"
-      className="rounded-lg border border-border p-4 bg-card space-y-4"
+      className="rounded-lg border border-border p-3 sm:p-4 bg-card space-y-4"
     >
       <h2 className="font-semibold">הגדרות</h2>
       <div>
@@ -481,8 +645,26 @@ function SettingsPanel() {
         />
       </div>
       <div>
+        <label className="text-sm block mb-1">
+          השהיה לפני משפט חדש: {(settings.restartDelayMs / 1000).toFixed(1)}s
+        </label>
+        <input
+          data-testid="restart-delay-slider"
+          type="range"
+          min={0}
+          max={10000}
+          step={500}
+          value={settings.restartDelayMs}
+          onChange={(e) => dispatch(setRestartDelayMs(Number(e.target.value)))}
+          className="w-full"
+        />
+      </div>
+      <div className="text-xs text-muted-foreground" data-testid="lang-info">
+        SST: {settings.sstLang} · TTS: {settings.ttsLang}
+      </div>
+      <div>
         <div className="text-sm mb-2">מנוע TTS:</div>
-        <div className="flex gap-2" data-testid="tts-engine-toggle">
+        <div className="flex flex-wrap gap-2" data-testid="tts-engine-toggle">
           <Button
             data-testid="tts-engine-api"
             size="sm"

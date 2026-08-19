@@ -148,7 +148,11 @@ export function useGameEngine() {
     return new Promise((resolve) => {
       try {
         const u = new SpeechSynthesisUtterance(text);
-        u.lang = "he-IL";
+        u.lang = settingsRef.current.ttsLang;
+        log("tts", "lang assigned (native)", {
+          engine: "native",
+          lang: u.lang,
+        });
         u.onend = () => resolve();
         u.onerror = () => resolve();
         window.speechSynthesis.speak(u);
@@ -159,6 +163,11 @@ export function useGameEngine() {
   }
 
   async function playApiTTS(text: string): Promise<void> {
+    log("tts", "lang assigned (api)", {
+      engine: "api",
+      lang: settingsRef.current.ttsLang,
+      voice: "alloy",
+    });
     const res = await generateTTS({ data: { text, voice: "alloy" } });
     const audio = new Audio(`data:${res.mime};base64,${res.audioBase64}`);
     ttsPlaybackRef.current = audio;
@@ -168,6 +177,7 @@ export function useGameEngine() {
       audio.play().catch(() => resolve());
     });
   }
+
 
   async function playTTS(text: string) {
     try {
@@ -259,9 +269,15 @@ export function useGameEngine() {
 
     const recognition = new SR();
     recognitionRef.current = recognition;
-    recognition.lang = "he-IL";
+    recognition.lang = settingsRef.current.sstLang;
     recognition.continuous = false;
     recognition.interimResults = true;
+    log("sst", "lang assigned", {
+      lang: recognition.lang,
+      continuous: false,
+      interimResults: true,
+    });
+
 
     let finalizedThisRun = false;
 
@@ -388,11 +404,20 @@ export function useGameEngine() {
             await runActionsFor(sentence);
           }
           if (errorPausedRef.current || !activeRef.current) return;
-          loopingRef.current = true;
+          const delay = settingsRef.current.restartDelayMs;
           dispatch(setRecording(false));
-          dispatch(setStatus("recording"));
-          startIteration();
+          dispatch(setStatus("waiting"));
+          log("session", "waiting before next sentence", { delayMs: delay });
+          if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+          restartTimerRef.current = setTimeout(() => {
+            restartTimerRef.current = null;
+            if (errorPausedRef.current || !activeRef.current) return;
+            loopingRef.current = true;
+            dispatch(setStatus("recording"));
+            startIteration();
+          }, delay);
         })();
+
       };
 
       if (mr.state !== "inactive") {
