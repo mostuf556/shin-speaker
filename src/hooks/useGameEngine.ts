@@ -349,14 +349,35 @@ export function useGameEngine() {
       if (resultWatchdog) clearTimeout(resultWatchdog);
       resultWatchdog = null;
     };
+    let sentenceFinalizeTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearSentenceFinalizeTimer = () => {
+      if (sentenceFinalizeTimer) clearTimeout(sentenceFinalizeTimer);
+      sentenceFinalizeTimer = null;
+    };
 
     recognition.onstart = () => logRecognitionEvent("start");
     recognition.onaudiostart = () => logRecognitionEvent("audio-start");
     recognition.onaudioend = () => logRecognitionEvent("audio-end");
     recognition.onsoundstart = () => logRecognitionEvent("sound-start");
     recognition.onsoundend = () => logRecognitionEvent("sound-end");
-    recognition.onspeechstart = () => logRecognitionEvent("speech-start");
-    recognition.onspeechend = () => logRecognitionEvent("speech-end");
+    recognition.onspeechstart = () => {
+      logRecognitionEvent("speech-start");
+      clearSentenceFinalizeTimer();
+    };
+    recognition.onspeechend = () => {
+      logRecognitionEvent("speech-end");
+      if (settingsRef.current.sstMode !== "continuous") return;
+      clearSentenceFinalizeTimer();
+      sentenceFinalizeTimer = setTimeout(() => {
+        if (finalizedThisRun || !currentSentenceRef.current) return;
+        finalizedThisRun = true;
+        const normalizedFinal = currentSentenceRef.current;
+        log("sst", "final-after-pause", normalizedFinal);
+        dispatch(setStaleText(normalizedFinal));
+        dispatch(setInterim(""));
+        finalizeSentence(normalizedFinal);
+      }, 1200);
+    };
     recognition.onnomatch = (event: any) =>
       logRecognitionEvent("no-match", {
         type: event?.type,
@@ -368,6 +389,7 @@ export function useGameEngine() {
 
     recognition.onresult = (event: any) => {
       clearResultWatchdog();
+      clearSentenceFinalizeTimer();
       const result = event.results[event.results.length - 1];
       logRecognitionEvent("result-received", {
         resultIndex: event.resultIndex,
@@ -421,7 +443,7 @@ export function useGameEngine() {
       knownWordsRef.current = currentWords;
       dispatch(setInterim(transcript));
 
-      if (result.isFinal) {
+      if (result.isFinal && settingsRef.current.sstMode === "single") {
         if (finalizedThisRun) return;
         finalizedThisRun = true;
         const normalizedFinal = transcript;
@@ -451,6 +473,7 @@ export function useGameEngine() {
     };
     recognition.onend = () => {
       clearResultWatchdog();
+      clearSentenceFinalizeTimer();
       log("sst", "end", {
         finalized: finalizedThisRun,
         hasTranscript: Boolean(currentSentenceRef.current),
@@ -509,6 +532,7 @@ export function useGameEngine() {
 
       const finishAndProcess = () => {
         clearResultWatchdog();
+        clearSentenceFinalizeTimer();
         const durationMs = performance.now() - startedAtRef.current;
         const url = mr
           ? URL.createObjectURL(
@@ -533,12 +557,6 @@ export function useGameEngine() {
         log("sentence", "saved", { text, containsShin, words: sentence.words.length });
         dispatch(addSentence(sentence));
         dispatch(sentenceAddedToHistory({ id: sentence.id, text: sentence.text }));
-
-        // Clear the main board after configured timeout
-        if (boardClearTimerRef.current) clearTimeout(boardClearTimerRef.current);
-        boardClearTimerRef.current = setTimeout(() => {
-          dispatch(clearBoard());
-        }, settingsRef.current.boardClearTimeoutMs);
 
         (async () => {
           if (containsShin && !errorPausedRef.current) {
