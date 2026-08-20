@@ -241,26 +241,27 @@ export function useGameEngine() {
       return;
     }
 
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (e: any) {
-      reportError(`Microphone access denied: ${e?.message ?? e}`, e);
-      dispatch(setActive(false));
-      return;
-    }
-    streamRef.current = stream;
-    startMeter(stream);
-
     const shouldRecordAudio = settingsRef.current.recordAudio;
+    let stream: MediaStream | null = null;
+    if (shouldRecordAudio) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (e: any) {
+        reportError(`Microphone access denied: ${e?.message ?? e}`, e);
+        dispatch(setActive(false));
+        return;
+      }
+      streamRef.current = stream;
+      startMeter(stream);
+    }
     let mr: MediaRecorder | null = null;
     if (shouldRecordAudio) {
       try {
-        mr = new MediaRecorder(stream);
+        mr = new MediaRecorder(stream!);
       } catch (e: any) {
         log("recorder", "unavailable", { message: e?.message ?? String(e) });
         reportError(`Audio recording could not start: ${e?.message ?? e}`, e);
-        stream.getTracks().forEach((t) => t.stop());
+        stream?.getTracks().forEach((t) => t.stop());
         stopMeter();
         dispatch(setActive(false));
         return;
@@ -428,7 +429,7 @@ export function useGameEngine() {
       } catch {
         /* noop */
       }
-      stream.getTracks().forEach((t) => t.stop());
+      stream?.getTracks().forEach((t) => t.stop());
       stopMeter();
       dispatch(setRecording(false));
       consecutiveRestartsRef.current += 1;
@@ -465,7 +466,7 @@ export function useGameEngine() {
               }),
             )
           : null;
-        stream.getTracks().forEach((t) => t.stop());
+        stream?.getTracks().forEach((t) => t.stop());
         stopMeter();
 
         const containsShin = text.includes("ש");
@@ -536,7 +537,7 @@ export function useGameEngine() {
       } catch {
         /* noop */
       }
-      stream.getTracks().forEach((t) => t.stop());
+      stream?.getTracks().forEach((t) => t.stop());
       stopMeter();
       dispatch(setRecording(false));
       reportError(`Speech recognition could not start: ${e?.message ?? e}`, e);

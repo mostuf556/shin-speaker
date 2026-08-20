@@ -319,7 +319,11 @@ export function HebrewShinGame() {
           <div className="flex items-center justify-between mb-1">
             <h2 className="font-semibold text-sm">מצב קלט</h2>
             <span className="text-xs text-muted-foreground">
-              {recording ? "מקליט" : "לא מקליט"}
+              {recording
+                ? settings.recordAudio
+                  ? "מקליט"
+                  : "מזהה דיבור"
+                : "לא פעיל"}
             </span>
           </div>
           <MicMeter level={micLevel} recording={recording} />
