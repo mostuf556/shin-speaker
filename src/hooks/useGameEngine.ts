@@ -813,12 +813,18 @@ export function useGameEngine() {
       audio.ontimeupdate = updatePlaybackPosition;
       audio.onloadedmetadata = () => {
         const recordedDuration = sentence.durationMs / 1000;
-        if (recordedDuration > 0 && Number.isFinite(audio.duration)) {
-          timingScale = audio.duration / recordedDuration;
-          audio.currentTime = sourceTime * timingScale;
-          updatePlaybackPosition();
-        }
+        const candidate =
+          recordedDuration > 0 && Number.isFinite(audio.duration) && audio.duration > 0
+            ? audio.duration / recordedDuration
+            : 1;
+        // Only trust the ratio when it is plausible: MediaRecorder blobs often
+        // report Infinity/0/bogus durations, which used to skew every word time.
+        timingScale = candidate > 0.9 && candidate < 1.1 ? candidate : 1;
+        log("playback", "timing scale", { candidate, timingScale });
+        audio.currentTime = sourceTime * timingScale;
+        updatePlaybackPosition();
       };
+
       audio.onplay = () => {
         if (playbackRaf == null) playbackRaf = requestAnimationFrame(tickPlayback);
       };
