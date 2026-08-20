@@ -289,19 +289,24 @@ export function useGameEngine() {
     const recognition = new SR();
     recognitionRef.current = recognition;
     recognition.lang = settingsRef.current.sstLang;
-    recognition.continuous = true;
+    recognition.continuous = false;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
     log("sst", "lang assigned", {
       engine: settingsRef.current.sstEngine,
       lang: recognition.lang,
-      continuous: true,
+      continuous: false,
       interimResults: true,
       maxAlternatives: 1,
     });
 
     const logRecognitionEvent = (eventName: string, data?: unknown) => {
       log("sst", eventName, data);
+    };
+    let resultWatchdog: ReturnType<typeof setTimeout> | null = null;
+    const clearResultWatchdog = () => {
+      if (resultWatchdog) clearTimeout(resultWatchdog);
+      resultWatchdog = null;
     };
 
     recognition.onstart = () => logRecognitionEvent("start");
@@ -320,6 +325,7 @@ export function useGameEngine() {
     let finalizedThisRun = false;
 
     recognition.onresult = (event: any) => {
+      clearResultWatchdog();
       const result = event.results[event.results.length - 1];
       logRecognitionEvent("result-received", {
         resultIndex: event.resultIndex,
@@ -398,6 +404,7 @@ export function useGameEngine() {
       reportError(`Speech recognition error: ${kind}`);
     };
     recognition.onend = () => {
+      clearResultWatchdog();
       log("sst", "end", {
         finalized: finalizedThisRun,
         hasTranscript: Boolean(currentSentenceRef.current),
@@ -449,6 +456,7 @@ export function useGameEngine() {
       }
 
       const finishAndProcess = () => {
+        clearResultWatchdog();
         const durationMs = performance.now() - startedAtRef.current;
         const url = mr
           ? URL.createObjectURL(
@@ -512,6 +520,15 @@ export function useGameEngine() {
     try {
       mr?.start();
       recognition.start();
+      resultWatchdog = setTimeout(() => {
+        if (finalizedThisRun || currentSentenceRef.current) return;
+        logRecognitionEvent("result-timeout", { timeoutMs: 15000 });
+        try {
+          recognition.stop();
+        } catch {
+          /* noop */
+        }
+      }, 15000);
     } catch (e: any) {
       log("sst", "start failed", e?.message ?? e);
       try {
@@ -536,6 +553,7 @@ export function useGameEngine() {
     errorPausedRef.current = false;
     activeRef.current = true;
     loopingRef.current = true;
+    dispatch(setError(null));
     dispatch(setActive(true));
     log("session", "start");
     startIteration();

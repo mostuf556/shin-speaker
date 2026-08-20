@@ -226,7 +226,6 @@ export function HebrewShinGame() {
                   data-testid="start-button-mobile"
                   onClick={start}
                   size="lg"
-                  disabled={!!error}
                 >
                   התחל
                 </Button>
@@ -251,7 +250,6 @@ export function HebrewShinGame() {
                   onClick={start}
                   size="lg"
                   className="text-lg"
-                  disabled={!!error}
                 >
                   התחל
                 </Button>
