@@ -233,16 +233,25 @@ export function HebrewShinGame() {
     (settings.showMainInterim && interimText) ||
     (settings.showMainFinal && staleText) ||
     "";
-  const mainStagePlaybackSentence = playingSentenceId
-    ? sentences.find((sentence) => sentence.id === playingSentenceId)
+  // The sentence the main stage should render: whatever is currently being
+  // highlighted (playback OR tts), else the sentence being played, else the
+  // last final text.
+  const mainStageHighlightSentence = highlight
+    ? sentences.find((sentence) => sentence.id === highlight.sentenceId)
     : undefined;
+  const mainStagePlaybackSentence =
+    mainStageHighlightSentence ??
+    (playingSentenceId
+      ? sentences.find((sentence) => sentence.id === playingSentenceId)
+      : undefined);
   const mainStageFinalSentence =
     mainStagePlaybackSentence ?? sentences.find((sentence) => sentence.text === staleText);
   const mainStagePlaybackWord =
-    highlight?.source === "playback" &&
-    highlight.sentenceId === playingSentenceId
+    highlight && mainStageFinalSentence?.id === highlight.sentenceId
       ? highlight.wordIndex
       : -1;
+  const mainStageHighlightSource = highlight?.source ?? null;
+
 
   return (
     <div
