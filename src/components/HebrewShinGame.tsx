@@ -232,6 +232,12 @@ export function HebrewShinGame() {
     (settings.showMainInterim && interimText) ||
     (settings.showMainFinal && staleText) ||
     "";
+  const mainStagePlaybackSentence =
+    highlight?.source === "playback"
+      ? sentences.find((sentence) => sentence.id === highlight.sentenceId)
+      : undefined;
+  const mainStagePlaybackWord =
+    highlight?.source === "playback" ? highlight.wordIndex : -1;
 
   return (
     <div
@@ -364,7 +370,16 @@ export function HebrewShinGame() {
             {settings.mainStageMode === "stacked" ? (
               <div className="space-y-2">
                 {settings.showMainFinal && staleText && (
-                  <div data-testid="main-final-text">{staleText}</div>
+                  <div data-testid="main-final-text">
+                    {mainStagePlaybackSentence ? (
+                      <MainStageWords
+                        sentence={mainStagePlaybackSentence}
+                        highlightedWord={mainStagePlaybackWord}
+                      />
+                    ) : (
+                      staleText
+                    )}
+                  </div>
                 )}
                 {settings.showMainInterim && interimText && (
                   <div
@@ -376,7 +391,14 @@ export function HebrewShinGame() {
                 )}
               </div>
             ) : (
-              mainStageText
+              mainStagePlaybackSentence ? (
+                <MainStageWords
+                  sentence={mainStagePlaybackSentence}
+                  highlightedWord={mainStagePlaybackWord}
+                />
+              ) : (
+                mainStageText
+              )
             )}
           </div>
           {settings.showMainMic && (
@@ -707,6 +729,38 @@ function SentenceRow({
         </div>
       </div>
     </li>
+  );
+}
+
+function MainStageWords({
+  sentence,
+  highlightedWord,
+}: {
+  sentence: Sentence;
+  highlightedWord: number;
+}) {
+  if (sentence.words.length === 0) return sentence.text;
+
+  return (
+    <span
+      className="flex flex-wrap justify-center gap-x-3 gap-y-1"
+      data-testid={`main-stage-words-${sentence.id}`}
+    >
+      {sentence.words.map((word, index) => (
+        <span
+          key={`${sentence.id}-${index}`}
+          data-testid={`main-stage-word-${sentence.id}-${index}`}
+          data-highlighted={index === highlightedWord ? "true" : "false"}
+          className={`px-1 rounded transition-all duration-150 ${
+            index === highlightedWord
+              ? "bg-emerald-500 text-white shadow-sm scale-110"
+              : ""
+          } ${word.word.includes("ש") ? "underline decoration-primary decoration-2" : ""}`}
+        >
+          {word.word}
+        </span>
+      ))}
+    </span>
   );
 }
 
