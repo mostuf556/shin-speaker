@@ -769,7 +769,9 @@ export function useGameEngine() {
       );
       log("playback", "start", { id: sentence.id, fromTime });
 
-      audio.ontimeupdate = () => {
+      let playbackRaf: number | null = null;
+      let lastHighlightedWord = initialWordIndex;
+      const updatePlaybackPosition = () => {
         const t = audio.currentTime;
         dispatch(setPlayback({ sentenceId: sentence.id, currentTime: t }));
         let idx = -1;
@@ -777,15 +779,34 @@ export function useGameEngine() {
           if (sentence.words[i].time <= t) idx = i;
           else break;
         }
-        dispatch(
-          setHighlight(
-            idx >= 0
-              ? { source: "playback", sentenceId: sentence.id, wordIndex: idx }
-              : null,
-          ),
-        );
+        if (idx !== lastHighlightedWord) {
+          lastHighlightedWord = idx;
+          dispatch(
+            setHighlight(
+              idx >= 0
+                ? { source: "playback", sentenceId: sentence.id, wordIndex: idx }
+                : null,
+            ),
+          );
+        }
+      };
+      const tickPlayback = () => {
+        updatePlaybackPosition();
+        if (!audio.paused && !audio.ended) {
+          playbackRaf = requestAnimationFrame(tickPlayback);
+        }
+      };
+      audio.ontimeupdate = updatePlaybackPosition;
+      audio.onplay = () => {
+        if (playbackRaf == null) playbackRaf = requestAnimationFrame(tickPlayback);
+      };
+      audio.onpause = () => {
+        if (playbackRaf != null) cancelAnimationFrame(playbackRaf);
+        playbackRaf = null;
       };
       audio.onended = () => {
+        if (playbackRaf != null) cancelAnimationFrame(playbackRaf);
+        playbackRaf = null;
         log("playback", "ended", sentence.id);
         dispatch(setPlayback({ sentenceId: null }));
         dispatch(setHighlight(null));
@@ -793,6 +814,8 @@ export function useGameEngine() {
         else dispatch(setStatus("recording"));
       };
       audio.onerror = () => {
+        if (playbackRaf != null) cancelAnimationFrame(playbackRaf);
+        playbackRaf = null;
         log("playback", "audio error", { id: sentence.id, url: sentence.audioUrl });
         dispatch(setPlayback({ sentenceId: null }));
         dispatch(setHighlight(null));
