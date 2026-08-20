@@ -756,6 +756,17 @@ export function useGameEngine() {
         setStatus(activeRef.current ? "playback-in-game" : "playback-out-of-game"),
       );
       dispatch(setPlayback({ sentenceId: sentence.id, currentTime: fromTime }));
+      const initialWordIndex = sentence.words.reduce(
+        (index, word, i) => (word.time <= fromTime ? i : index),
+        -1,
+      );
+      dispatch(
+        setHighlight(
+          initialWordIndex >= 0
+            ? { source: "playback", sentenceId: sentence.id, wordIndex: initialWordIndex }
+            : null,
+        ),
+      );
       log("playback", "start", { id: sentence.id, fromTime });
 
       audio.ontimeupdate = () => {

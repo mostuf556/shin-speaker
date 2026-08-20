@@ -140,6 +140,7 @@ export function HebrewShinGame() {
   const interimText = useAppSelector((s) => s.session.interimText);
   const staleText = useAppSelector((s) => s.session.staleText);
   const highlight = useAppSelector((s) => s.session.highlight);
+  const playingSentenceId = useAppSelector((s) => s.session.playingSentenceId);
   const status = useAppSelector((s) => s.session.status);
   const micLevel = useAppSelector((s) => s.session.micLevel);
   const error = useAppSelector((s) => s.session.error);
@@ -232,12 +233,14 @@ export function HebrewShinGame() {
     (settings.showMainInterim && interimText) ||
     (settings.showMainFinal && staleText) ||
     "";
-  const mainStagePlaybackSentence =
-    highlight?.source === "playback"
-      ? sentences.find((sentence) => sentence.id === highlight.sentenceId)
-      : undefined;
+  const mainStagePlaybackSentence = playingSentenceId
+    ? sentences.find((sentence) => sentence.id === playingSentenceId)
+    : undefined;
   const mainStagePlaybackWord =
-    highlight?.source === "playback" ? highlight.wordIndex : -1;
+    highlight?.source === "playback" &&
+    highlight.sentenceId === playingSentenceId
+      ? highlight.wordIndex
+      : -1;
 
   return (
     <div
@@ -369,7 +372,7 @@ export function HebrewShinGame() {
           >
             {settings.mainStageMode === "stacked" ? (
               <div className="space-y-2">
-                {settings.showMainFinal && staleText && (
+                {settings.showMainFinal && (staleText || mainStagePlaybackSentence) && (
                   <div data-testid="main-final-text">
                     {mainStagePlaybackSentence ? (
                       <MainStageWords
