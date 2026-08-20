@@ -163,6 +163,19 @@ export function useGameEngine() {
     log("recorder", "stopRecording");
   }, [dispatch, log, stopMeter]);
 
+  const stopSpeechForPlayback = useCallback(() => {
+    loopingRef.current = false;
+    activeRef.current = false;
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+    stopRecording();
+    dispatch(setActive(false));
+    dispatch(setStatus("idle"));
+    log("session", "stopped for playback");
+  }, [dispatch, log, stopRecording]);
+
   async function playNativeTTS(text: string): Promise<void> {
     return new Promise((resolve) => {
       try {
@@ -349,11 +362,6 @@ export function useGameEngine() {
       if (resultWatchdog) clearTimeout(resultWatchdog);
       resultWatchdog = null;
     };
-    let sentenceFinalizeTimer: ReturnType<typeof setTimeout> | null = null;
-    const clearSentenceFinalizeTimer = () => {
-      if (sentenceFinalizeTimer) clearTimeout(sentenceFinalizeTimer);
-      sentenceFinalizeTimer = null;
-    };
 
     recognition.onstart = () => logRecognitionEvent("start");
     recognition.onaudiostart = () => logRecognitionEvent("audio-start");
@@ -362,22 +370,9 @@ export function useGameEngine() {
     recognition.onsoundend = () => logRecognitionEvent("sound-end");
     recognition.onspeechstart = () => {
       logRecognitionEvent("speech-start");
-      clearSentenceFinalizeTimer();
+      receivedTranscript = false;
     };
-    recognition.onspeechend = () => {
-      logRecognitionEvent("speech-end");
-      if (settingsRef.current.sstMode !== "continuous") return;
-      clearSentenceFinalizeTimer();
-      sentenceFinalizeTimer = setTimeout(() => {
-        if (finalizedThisRun || !currentSentenceRef.current) return;
-        finalizedThisRun = true;
-        const normalizedFinal = currentSentenceRef.current;
-        log("sst", "final-after-pause", normalizedFinal);
-        dispatch(setStaleText(normalizedFinal));
-        dispatch(setInterim(""));
-        finalizeSentence(normalizedFinal);
-      }, 1200);
-    };
+    recognition.onspeechend = () => logRecognitionEvent("speech-end");
     recognition.onnomatch = (event: any) =>
       logRecognitionEvent("no-match", {
         type: event?.type,
@@ -389,7 +384,6 @@ export function useGameEngine() {
 
     recognition.onresult = (event: any) => {
       clearResultWatchdog();
-      clearSentenceFinalizeTimer();
       const result = event.results[event.results.length - 1];
       logRecognitionEvent("result-received", {
         resultIndex: event.resultIndex,
@@ -408,6 +402,7 @@ export function useGameEngine() {
         Array.from(event.results as ArrayLike<any>)
           .map((item: any) => item[0]?.transcript ?? ""),
       );
+      const displayTranscript = result[0]?.transcript?.trim() ?? "";
       if (!transcript) {
         logRecognitionEvent("no-transcript", {
           resultIndex: event.resultIndex,
@@ -430,6 +425,13 @@ export function useGameEngine() {
 
       const currentWords = extractWords(transcript);
       const elapsed = (performance.now() - startedAtRef.current) / 1000;
+      for (let i = knownWordsRef.current.length; i < currentWords.length; i++) {
+        logRecognitionEvent("word-end", {
+          word: currentWords[i],
+          wordIndex: i,
+          elapsed,
+        });
+      }
       const newWords: WordTiming[] = [];
       for (let i = 0; i < currentWords.length; i++) {
         const existing = wordsRef.current[i];
@@ -441,12 +443,16 @@ export function useGameEngine() {
       }
       wordsRef.current = newWords;
       knownWordsRef.current = currentWords;
-      dispatch(setInterim(transcript));
+      dispatch(setInterim(displayTranscript || transcript));
 
       if (result.isFinal && settingsRef.current.sstMode === "single") {
         if (finalizedThisRun) return;
         finalizedThisRun = true;
         const normalizedFinal = transcript;
+        logRecognitionEvent("sentence-end", {
+          text: normalizedFinal,
+          reason: "final-result",
+        });
         log("sst", "final", normalizedFinal);
         dispatch(setStaleText(normalizedFinal));
         dispatch(setInterim(""));
@@ -473,7 +479,6 @@ export function useGameEngine() {
     };
     recognition.onend = () => {
       clearResultWatchdog();
-      clearSentenceFinalizeTimer();
       log("sst", "end", {
         finalized: finalizedThisRun,
         hasTranscript: Boolean(currentSentenceRef.current),
@@ -485,6 +490,10 @@ export function useGameEngine() {
       if (currentSentenceRef.current) {
         finalizedThisRun = true;
         const normalizedFinal = currentSentenceRef.current;
+        logRecognitionEvent("sentence-end", {
+          text: normalizedFinal,
+          reason: "recognition-end",
+        });
         log("sst", "final-from-end", normalizedFinal);
         dispatch(setStaleText(normalizedFinal));
         dispatch(setInterim(""));
@@ -532,7 +541,6 @@ export function useGameEngine() {
 
       const finishAndProcess = () => {
         clearResultWatchdog();
-        clearSentenceFinalizeTimer();
         const durationMs = performance.now() - startedAtRef.current;
         const url = mr
           ? URL.createObjectURL(
@@ -675,6 +683,7 @@ export function useGameEngine() {
         log("playback", "no audio url", sentence.id);
         return;
       }
+      stopSpeechForPlayback();
       audioElementRef.current?.pause();
       const audio = new Audio(sentence.audioUrl);
       audioElementRef.current = audio;
@@ -713,11 +722,12 @@ export function useGameEngine() {
         reportError(`Playback failed: ${e?.message ?? e}`, e);
       });
     },
-    [dispatch, log, reportError],
+    [dispatch, log, reportError, stopSpeechForPlayback],
   );
 
   const playTTSHighlighted = useCallback(
     async (sentence: Sentence) => {
+      stopSpeechForPlayback();
       log("tts", "start", sentence.text);
       dispatch(setStatus("tts-sentence"));
       try {
@@ -773,7 +783,7 @@ export function useGameEngine() {
         reportError(`TTS failed: ${e?.message ?? e}`, e);
       }
     },
-    [dispatch, log, reportError],
+    [dispatch, log, reportError, stopSpeechForPlayback],
   );
 
   useEffect(() => {
