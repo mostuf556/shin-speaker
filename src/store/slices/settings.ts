@@ -4,6 +4,7 @@ export type ActionType = "playback" | "word-tts" | "sentence-tts";
 export type TTSEngine = "native" | "api";
 export type SSTEngine = "native";
 export type SSTMode = "single" | "continuous";
+export type SentenceEndDetection = "native" | "timeout";
 export type MainStageMode = "latest" | "stacked";
 export type HistoryView = "expanded" | "shrinked" | "hidden";
 
@@ -13,6 +14,7 @@ interface SettingsState {
   ttsEngine: TTSEngine;
   sstEngine: SSTEngine;
   sstMode: SSTMode;
+  sentenceEndDetection: SentenceEndDetection;
   autoRestartSST: boolean;
   boardClearTimeoutMs: number;
   restartDelayMs: number;
@@ -33,6 +35,7 @@ const initialState: SettingsState = {
   ttsEngine: "api",
   sstEngine: "native",
   sstMode: "continuous",
+  sentenceEndDetection: "timeout",
   autoRestartSST: true,
   boardClearTimeoutMs: 1000,
   restartDelayMs: 1500,
@@ -100,6 +103,9 @@ const slice = createSlice({
     setSSTMode(state, a: PayloadAction<SSTMode>) {
       state.sstMode = a.payload;
     },
+    setSentenceEndDetection(state, a: PayloadAction<SentenceEndDetection>) {
+      state.sentenceEndDetection = a.payload;
+    },
     toggleAutoRestartSST(state) {
       state.autoRestartSST = !state.autoRestartSST;
     },
@@ -124,6 +130,7 @@ export const {
   toggleShowMainMic,
   setMainStageMode,
   setSSTMode,
+  setSentenceEndDetection,
   toggleAutoRestartSST,
   toggleRecordAudio,
 } = slice.actions;

@@ -15,6 +15,7 @@ import {
   toggleShowMainMic,
   setMainStageMode,
   setSSTMode,
+  setSentenceEndDetection,
   toggleAutoRestartSST,
   toggleRecordAudio,
 } from "@/store/slices/settings";
@@ -87,6 +88,13 @@ const STATUS_CHIP: Record<AppStatus, { on: string; off: string }> = {
     off: "border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300",
   },
 };
+
+const STAGE_BACKGROUNDS = [
+  "bg-sky-50 dark:bg-sky-950/40",
+  "bg-lime-50 dark:bg-lime-950/40",
+  "bg-orange-50 dark:bg-orange-950/40",
+  "bg-fuchsia-50 dark:bg-fuchsia-950/40",
+];
 
 const ALL_STATUSES = Object.keys(STATUS_LABELS) as AppStatus[];
 
@@ -261,6 +269,24 @@ export function HebrewShinGame() {
           </div>
           <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
             <AppStatusVisualizer status={status} />
+            <div className="flex items-center gap-1 rounded-md border border-border bg-card p-1" data-testid="sentence-end-detection-toggle">
+              <Button
+                data-testid="sentence-end-detection-timeout"
+                size="sm"
+                variant={settings.sentenceEndDetection === "timeout" ? "default" : "outline"}
+                onClick={() => dispatch(setSentenceEndDetection("timeout"))}
+              >
+                טיימאוט
+              </Button>
+              <Button
+                data-testid="sentence-end-detection-native"
+                size="sm"
+                variant={settings.sentenceEndDetection === "native" ? "default" : "outline"}
+                onClick={() => dispatch(setSentenceEndDetection("native"))}
+              >
+                טבעי
+              </Button>
+            </div>
             <div className="hidden sm:block">
               {!active ? (
                 <Button
@@ -319,7 +345,8 @@ export function HebrewShinGame() {
 
         <section
           data-testid="main-board-section"
-          className="rounded-lg border-2 border-dashed border-border p-4 sm:p-8 min-h-40 flex flex-col items-center justify-center bg-card gap-4"
+          className={`rounded-lg border-2 border-dashed border-border p-4 sm:p-8 min-h-40 flex flex-col items-center justify-center gap-4 transition-colors duration-500 ${STAGE_BACKGROUNDS[sentences.length % STAGE_BACKGROUNDS.length]}`}
+          data-stage-color={sentences.length % STAGE_BACKGROUNDS.length}
         >
           <div
             id="main_board"
@@ -693,7 +720,7 @@ function SettingsPanel() {
       </div>
       <div>
         <label className="text-sm block mb-1">
-          ניקוי לוח לאחר משפט: {settings.boardClearTimeoutMs}ms
+          סיום משפט לפי טיימאוט: {settings.boardClearTimeoutMs}ms
         </label>
         <input
           data-testid="board-clear-slider"
@@ -724,7 +751,7 @@ function SettingsPanel() {
         />
       </div>
       <div className="text-xs text-muted-foreground" data-testid="lang-info">
-        SST: {settings.sstEngine} ({settings.sstLang}, {settings.sstMode}) · TTS: {settings.ttsLang}
+        SST: {settings.sstEngine} ({settings.sstLang}, {settings.sstMode}) · סוף משפט: {settings.sentenceEndDetection} · TTS: {settings.ttsLang}
       </div>
       <div>
         <div className="text-sm mb-1">מצב זיהוי דיבור:</div>

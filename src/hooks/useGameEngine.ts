@@ -358,9 +358,14 @@ export function useGameEngine() {
       log("sst", eventName, data);
     };
     let resultWatchdog: ReturnType<typeof setTimeout> | null = null;
+    let sentenceEndTimer: ReturnType<typeof setTimeout> | null = null;
     const clearResultWatchdog = () => {
       if (resultWatchdog) clearTimeout(resultWatchdog);
       resultWatchdog = null;
+    };
+    const clearSentenceEndTimer = () => {
+      if (sentenceEndTimer) clearTimeout(sentenceEndTimer);
+      sentenceEndTimer = null;
     };
 
     recognition.onstart = () => logRecognitionEvent("start");
@@ -425,6 +430,23 @@ export function useGameEngine() {
       }
       currentSentenceRef.current = transcript;
 
+      if (settingsRef.current.sentenceEndDetection === "timeout") {
+        clearSentenceEndTimer();
+        sentenceEndTimer = setTimeout(() => {
+          if (finalizedThisRun || !currentSentenceRef.current) return;
+          finalizedThisRun = true;
+          const normalizedFinal = currentSentenceRef.current;
+          logRecognitionEvent("sentence-end", {
+            text: normalizedFinal,
+            reason: "timeout",
+          });
+          log("sst", "final-from-timeout", normalizedFinal);
+          dispatch(setStaleText(normalizedFinal));
+          dispatch(setInterim(""));
+          finalizeSentence(normalizedFinal);
+        }, settingsRef.current.boardClearTimeoutMs);
+      }
+
       log("sst", result.isFinal ? "final-result" : "interim-result", {
         transcript,
         isFinal: result.isFinal,
@@ -452,7 +474,10 @@ export function useGameEngine() {
       knownWordsRef.current = currentWords;
       dispatch(setInterim(displayTranscript || transcript));
 
-      if (result.isFinal && settingsRef.current.sstMode === "single") {
+      if (
+        result.isFinal &&
+        settingsRef.current.sentenceEndDetection === "native"
+      ) {
         if (finalizedThisRun) return;
         finalizedThisRun = true;
         const normalizedFinal = transcript;
@@ -494,7 +519,10 @@ export function useGameEngine() {
       if (finalizedThisRun) {
         return;
       }
-      if (currentSentenceRef.current) {
+      if (
+        currentSentenceRef.current &&
+        settingsRef.current.sentenceEndDetection === "native"
+      ) {
         finalizedThisRun = true;
         const normalizedFinal = currentSentenceRef.current;
         logRecognitionEvent("sentence-end", {
@@ -505,6 +533,12 @@ export function useGameEngine() {
         dispatch(setStaleText(normalizedFinal));
         dispatch(setInterim(""));
         finalizeSentence(normalizedFinal);
+        return;
+      }
+      if (currentSentenceRef.current) {
+        logRecognitionEvent("sentence-end-waiting", {
+          timeoutMs: settingsRef.current.boardClearTimeoutMs,
+        });
         return;
       }
       log("sst", "no-result", { reason: "recognition-ended-without-transcript" });
@@ -540,6 +574,7 @@ export function useGameEngine() {
     const finalizeSentence = (text: string) => {
       if (!loopingRef.current) return;
       loopingRef.current = false;
+      clearSentenceEndTimer();
       try {
         recognition.stop();
       } catch {
