@@ -149,20 +149,29 @@ export function useGameEngine() {
       try {
         const u = new SpeechSynthesisUtterance(text);
         u.lang = settingsRef.current.ttsLang;
+        log("tts", "start", { engine: "native", text, lang: u.lang });
         log("tts", "lang assigned (native)", {
           engine: "native",
           lang: u.lang,
         });
-        u.onend = () => resolve();
-        u.onerror = () => resolve();
+        u.onend = () => {
+          log("tts", "ended", { engine: "native" });
+          resolve();
+        };
+        u.onerror = (event: any) => {
+          log("tts", "error", { engine: "native", error: event?.error });
+          resolve();
+        };
         window.speechSynthesis.speak(u);
-      } catch {
+      } catch (e: any) {
+        log("tts", "error", { engine: "native", message: e?.message ?? String(e) });
         resolve();
       }
     });
   }
 
   async function playApiTTS(text: string): Promise<void> {
+    log("tts", "start", { engine: "api", text });
     log("tts", "lang assigned (api)", {
       engine: "api",
       lang: settingsRef.current.ttsLang,
@@ -172,9 +181,18 @@ export function useGameEngine() {
     const audio = new Audio(`data:${res.mime};base64,${res.audioBase64}`);
     ttsPlaybackRef.current = audio;
     await new Promise<void>((resolve) => {
-      audio.onended = () => resolve();
-      audio.onerror = () => resolve();
-      audio.play().catch(() => resolve());
+      audio.onended = () => {
+        log("tts", "ended", { engine: "api" });
+        resolve();
+      };
+      audio.onerror = () => {
+        log("tts", "error", { engine: "api", stage: "audio" });
+        resolve();
+      };
+      audio.play().catch((error) => {
+        log("tts", "error", { engine: "api", stage: "play", message: error?.message });
+        resolve();
+      });
     });
   }
 
@@ -187,6 +205,7 @@ export function useGameEngine() {
         await playApiTTS(text);
       }
     } catch (e: any) {
+      log("tts", "error", { message: e?.message ?? String(e) });
       reportError(`TTS failed: ${e?.message ?? e}`, e);
     }
   }

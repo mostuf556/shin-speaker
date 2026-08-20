@@ -132,11 +132,19 @@ export function HebrewShinGame() {
   const settings = useAppSelector((s) => s.settings);
   const logEntries = useAppSelector((s) => s.log.entries);
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
+  const [logFilter, setLogFilter] = useState<"all" | "sst" | "tts">("all");
 
   const { start, stop, playRecording, playTTSHighlighted, dismissError } =
     useGameEngine();
 
   const orderedLog = useMemo(() => [...logEntries].reverse(), [logEntries]);
+  const visibleLog = useMemo(
+    () =>
+      logFilter === "all"
+        ? orderedLog
+        : orderedLog.filter((entry) => entry.tag === logFilter),
+    [logFilter, orderedLog],
+  );
 
   // Debug bundle: state snapshot + detected sentences + log lines.
   const buildDebugReport = () => {
@@ -373,6 +381,17 @@ export function HebrewShinGame() {
             <div className="flex items-center justify-between mb-2 gap-2">
               <h2 className="font-semibold">יומן אירועים</h2>
               <div className="flex gap-2">
+                {(["all", "sst", "tts"] as const).map((filter) => (
+                  <Button
+                    key={filter}
+                    data-testid={`log-filter-${filter}`}
+                    size="sm"
+                    variant={logFilter === filter ? "default" : "outline"}
+                    onClick={() => setLogFilter(filter)}
+                  >
+                    {filter === "all" ? "הכל" : filter.toUpperCase()}
+                  </Button>
+                ))}
                 <Button
                   data-testid="log-copy"
                   size="sm"
@@ -399,7 +418,7 @@ export function HebrewShinGame() {
               className="h-56 sm:h-64 overflow-y-auto font-mono text-[10px] sm:text-xs space-y-0.5 bg-muted/40 rounded p-2"
               dir="ltr"
             >
-              {orderedLog.map((e) => (
+              {visibleLog.map((e) => (
                 <div key={e.id} data-testid={`log-entry-${e.tag}`} className="flex gap-2">
                   <span className="text-muted-foreground">
                     {new Date(e.time).toLocaleTimeString()}
