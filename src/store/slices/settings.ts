@@ -4,6 +4,7 @@ export type ActionType = "playback" | "word-tts" | "sentence-tts";
 export type TTSEngine = "native" | "api";
 export type SSTEngine = "native";
 export type SSTMode = "single" | "continuous";
+export type MainStageMode = "latest" | "stacked";
 export type HistoryView = "expanded" | "shrinked" | "hidden";
 
 interface SettingsState {
@@ -20,6 +21,7 @@ interface SettingsState {
   showMainInterim: boolean;
   showMainFinal: boolean;
   showMainMic: boolean;
+  mainStageMode: MainStageMode;
   recordAudio: boolean;
   sstLang: string;
   ttsLang: string;
@@ -39,6 +41,7 @@ const initialState: SettingsState = {
   showMainInterim: true,
   showMainFinal: true,
   showMainMic: false,
+  mainStageMode: "latest",
   recordAudio: false,
   sstLang: "he-IL",
   ttsLang: "he-IL",
@@ -91,6 +94,9 @@ const slice = createSlice({
     toggleShowMainMic(state) {
       state.showMainMic = !state.showMainMic;
     },
+    setMainStageMode(state, a: PayloadAction<MainStageMode>) {
+      state.mainStageMode = a.payload;
+    },
     setSSTMode(state, a: PayloadAction<SSTMode>) {
       state.sstMode = a.payload;
     },
@@ -116,6 +122,7 @@ export const {
   toggleShowMainInterim,
   toggleShowMainFinal,
   toggleShowMainMic,
+  setMainStageMode,
   setSSTMode,
   toggleAutoRestartSST,
   toggleRecordAudio,

@@ -22,6 +22,25 @@ function extractWords(text: string): string[] {
   return text.trim().split(/\s+/).filter(Boolean);
 }
 
+function mergeRecognitionSegments(segments: string[]): string {
+  const words: string[] = [];
+  for (const segment of segments) {
+    const segmentWords = extractWords(segment);
+    let overlap = 0;
+    const maxOverlap = Math.min(words.length, segmentWords.length);
+    for (let size = maxOverlap; size > 0; size--) {
+      const previous = words.slice(-size).join(" ");
+      const next = segmentWords.slice(0, size).join(" ");
+      if (previous === next) {
+        overlap = size;
+        break;
+      }
+    }
+    words.push(...segmentWords.slice(overlap));
+  }
+  return words.join(" ");
+}
+
 export function useGameEngine() {
   const dispatch = useAppDispatch();
   const settings = useAppSelector((s) => s.settings);
@@ -361,10 +380,10 @@ export function useGameEngine() {
       });
       if (!result) return;
 
-      const transcript = Array.from(event.results as ArrayLike<any>)
-        .map((item: any) => item[0]?.transcript ?? "")
-        .join(" ")
-        .trim();
+      const transcript = mergeRecognitionSegments(
+        Array.from(event.results as ArrayLike<any>)
+          .map((item: any) => item[0]?.transcript ?? ""),
+      );
       if (!transcript) {
         logRecognitionEvent("no-transcript", {
           resultIndex: event.resultIndex,

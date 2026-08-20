@@ -13,6 +13,7 @@ import {
   toggleShowMainInterim,
   toggleShowMainFinal,
   toggleShowMainMic,
+  setMainStageMode,
   setSSTMode,
   toggleAutoRestartSST,
   toggleRecordAudio,
@@ -325,7 +326,23 @@ export function HebrewShinGame() {
             data-testid="main_board"
             className="text-2xl sm:text-4xl font-semibold text-center leading-relaxed break-words"
           >
-            {mainStageText}
+            {settings.mainStageMode === "stacked" ? (
+              <div className="space-y-2">
+                {settings.showMainFinal && staleText && (
+                  <div data-testid="main-final-text">{staleText}</div>
+                )}
+                {settings.showMainInterim && interimText && (
+                  <div
+                    data-testid="main-interim-text"
+                    className="text-muted-foreground"
+                  >
+                    {interimText}
+                  </div>
+                )}
+              </div>
+            ) : (
+              mainStageText
+            )}
           </div>
           {settings.showMainMic && (
             <MicMeter level={micLevel} recording={recording} />
@@ -750,6 +767,24 @@ function SettingsPanel() {
       </label>
       <div className="space-y-1">
         <div className="text-sm mb-1">תצוגה בלוח הראשי:</div>
+        <div className="flex gap-2" data-testid="main-stage-mode-toggle">
+          <Button
+            data-testid="main-stage-mode-latest"
+            size="sm"
+            variant={settings.mainStageMode === "latest" ? "default" : "outline"}
+            onClick={() => dispatch(setMainStageMode("latest"))}
+          >
+            אחרון בלבד
+          </Button>
+          <Button
+            data-testid="main-stage-mode-stacked"
+            size="sm"
+            variant={settings.mainStageMode === "stacked" ? "default" : "outline"}
+            onClick={() => dispatch(setMainStageMode("stacked"))}
+          >
+            סופי וביניים
+          </Button>
+        </div>
         <label className="flex items-center gap-2 text-sm cursor-pointer">
           <input
             data-testid="show-main-interim-checkbox"
