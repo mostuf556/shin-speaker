@@ -477,12 +477,23 @@ export function useGameEngine() {
         });
       }
       const newWords: WordTiming[] = [];
+      const newWordCount = Math.max(0, currentWords.length - wordsRef.current.length);
+      const previousWordTime =
+        wordsRef.current.length > 0
+          ? wordsRef.current[wordsRef.current.length - 1].time
+          : 0;
+      let newWordOrdinal = 0;
       for (let i = 0; i < currentWords.length; i++) {
         const existing = wordsRef.current[i];
         if (existing && existing.word === currentWords[i]) {
           newWords.push(existing);
         } else {
-          newWords.push({ word: currentWords[i], time: elapsed });
+          newWordOrdinal += 1;
+          const progress =
+            newWordCount > 0 ? newWordOrdinal / newWordCount : 1;
+          const time =
+            previousWordTime + (elapsed - previousWordTime) * progress;
+          newWords.push({ word: currentWords[i], time });
         }
       }
       wordsRef.current = newWords;
