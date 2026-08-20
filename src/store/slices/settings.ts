@@ -3,6 +3,7 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 export type ActionType = "playback" | "word-tts" | "sentence-tts";
 export type TTSEngine = "native" | "api";
 export type SSTEngine = "native";
+export type SSTMode = "single" | "continuous";
 export type HistoryView = "expanded" | "shrinked" | "hidden";
 
 interface SettingsState {
@@ -10,10 +11,15 @@ interface SettingsState {
   actions: ActionType[];
   ttsEngine: TTSEngine;
   sstEngine: SSTEngine;
+  sstMode: SSTMode;
+  autoRestartSST: boolean;
   boardClearTimeoutMs: number;
   restartDelayMs: number;
   historyView: HistoryView;
   showInterim: boolean;
+  showMainInterim: boolean;
+  showMainFinal: boolean;
+  showMainMic: boolean;
   recordAudio: boolean;
   sstLang: string;
   ttsLang: string;
@@ -24,10 +30,15 @@ const initialState: SettingsState = {
   actions: ["playback", "word-tts", "sentence-tts"],
   ttsEngine: "api",
   sstEngine: "native",
+  sstMode: "continuous",
+  autoRestartSST: true,
   boardClearTimeoutMs: 1000,
   restartDelayMs: 1500,
   historyView: "expanded",
   showInterim: true,
+  showMainInterim: true,
+  showMainFinal: true,
+  showMainMic: false,
   recordAudio: false,
   sstLang: "he-IL",
   ttsLang: "he-IL",
@@ -71,6 +82,21 @@ const slice = createSlice({
     toggleShowInterim(state) {
       state.showInterim = !state.showInterim;
     },
+    toggleShowMainInterim(state) {
+      state.showMainInterim = !state.showMainInterim;
+    },
+    toggleShowMainFinal(state) {
+      state.showMainFinal = !state.showMainFinal;
+    },
+    toggleShowMainMic(state) {
+      state.showMainMic = !state.showMainMic;
+    },
+    setSSTMode(state, a: PayloadAction<SSTMode>) {
+      state.sstMode = a.payload;
+    },
+    toggleAutoRestartSST(state) {
+      state.autoRestartSST = !state.autoRestartSST;
+    },
     toggleRecordAudio(state) {
       state.recordAudio = !state.recordAudio;
     },
@@ -87,6 +113,11 @@ export const {
   setHistoryView,
   cycleHistoryView,
   toggleShowInterim,
+  toggleShowMainInterim,
+  toggleShowMainFinal,
+  toggleShowMainMic,
+  setSSTMode,
+  toggleAutoRestartSST,
   toggleRecordAudio,
 } = slice.actions;
 export default slice.reducer;

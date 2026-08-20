@@ -290,13 +290,14 @@ export function useGameEngine() {
     const recognition = new SR();
     recognitionRef.current = recognition;
     recognition.lang = settingsRef.current.sstLang;
-    recognition.continuous = false;
+    recognition.continuous = settingsRef.current.sstMode === "continuous";
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
     log("sst", "lang assigned", {
       engine: settingsRef.current.sstEngine,
+      mode: settingsRef.current.sstMode,
       lang: recognition.lang,
-      continuous: false,
+      continuous: recognition.continuous,
       interimResults: true,
       maxAlternatives: 1,
     });
@@ -383,7 +384,6 @@ export function useGameEngine() {
         dispatch(setStaleText(normalizedFinal));
         dispatch(setInterim(""));
         finalizeSentence(normalizedFinal);
-        dispatch(clearBoard());
         wordsRef.current = [];
         knownWordsRef.current = [];
       }
@@ -432,6 +432,12 @@ export function useGameEngine() {
       stream?.getTracks().forEach((t) => t.stop());
       stopMeter();
       dispatch(setRecording(false));
+      if (!settingsRef.current.autoRestartSST) {
+        dispatch(setActive(false));
+        dispatch(setStatus("idle"));
+        log("sst", "auto-restart-disabled");
+        return;
+      }
       consecutiveRestartsRef.current += 1;
       const base = Math.min(30000, 200 * 2 ** consecutiveRestartsRef.current);
       const backoff = base + Math.random() * 200;
@@ -496,6 +502,12 @@ export function useGameEngine() {
           if (errorPausedRef.current || !activeRef.current) return;
           const delay = settingsRef.current.restartDelayMs;
           dispatch(setRecording(false));
+          if (!settingsRef.current.autoRestartSST) {
+            dispatch(setActive(false));
+            dispatch(setStatus("idle"));
+            log("sst", "auto-restart-disabled");
+            return;
+          }
           dispatch(setStatus("waiting"));
           log("session", "waiting before next sentence", { delayMs: delay });
           if (restartTimerRef.current) clearTimeout(restartTimerRef.current);

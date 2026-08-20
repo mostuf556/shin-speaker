@@ -10,6 +10,11 @@ import {
   setHistoryView,
   HistoryView,
   toggleShowInterim,
+  toggleShowMainInterim,
+  toggleShowMainFinal,
+  toggleShowMainMic,
+  setSSTMode,
+  toggleAutoRestartSST,
   toggleRecordAudio,
 } from "@/store/slices/settings";
 import { clearLog } from "@/store/slices/log";
@@ -198,6 +203,10 @@ export function HebrewShinGame() {
   };
 
   const historyView = settings.historyView;
+  const mainStageText =
+    (settings.showMainInterim && interimText) ||
+    (settings.showMainFinal && staleText) ||
+    "";
 
   return (
     <div
@@ -306,10 +315,13 @@ export function HebrewShinGame() {
           <div
             id="main_board"
             data-testid="main_board"
-            className={`text-2xl sm:text-4xl font-semibold text-center leading-relaxed break-words ${staleText ? "" : "text-muted-foreground"}`}
+            className="text-2xl sm:text-4xl font-semibold text-center leading-relaxed break-words"
           >
-            {staleText}
+            {mainStageText}
           </div>
+          {settings.showMainMic && (
+            <MicMeter level={micLevel} recording={recording} />
+          )}
         </section>
 
         <section
@@ -676,8 +688,38 @@ function SettingsPanel() {
         />
       </div>
       <div className="text-xs text-muted-foreground" data-testid="lang-info">
-        SST: {settings.sstEngine} ({settings.sstLang}) · TTS: {settings.ttsLang}
+        SST: {settings.sstEngine} ({settings.sstLang}, {settings.sstMode}) · TTS: {settings.ttsLang}
       </div>
+      <div>
+        <div className="text-sm mb-1">מצב זיהוי דיבור:</div>
+        <div className="flex gap-2" data-testid="sst-mode-toggle">
+          <Button
+            data-testid="sst-mode-single"
+            size="sm"
+            variant={settings.sstMode === "single" ? "default" : "outline"}
+            onClick={() => dispatch(setSSTMode("single"))}
+          >
+            משפט יחיד
+          </Button>
+          <Button
+            data-testid="sst-mode-continuous"
+            size="sm"
+            variant={settings.sstMode === "continuous" ? "default" : "outline"}
+            onClick={() => dispatch(setSSTMode("continuous"))}
+          >
+            רציף
+          </Button>
+        </div>
+      </div>
+      <label className="flex items-center gap-2 text-sm cursor-pointer">
+        <input
+          data-testid="sst-auto-restart-checkbox"
+          type="checkbox"
+          checked={settings.autoRestartSST}
+          onChange={() => dispatch(toggleAutoRestartSST())}
+        />
+        הפעלה מחדש אוטומטית של זיהוי הדיבור
+      </label>
       <label className="flex items-center gap-2 text-sm cursor-pointer">
         <input
           data-testid="show-interim-checkbox"
@@ -687,6 +729,36 @@ function SettingsPanel() {
         />
         הצג דיבור ביניים לניפוי שגיאות
       </label>
+      <div className="space-y-1">
+        <div className="text-sm mb-1">תצוגה בלוח הראשי:</div>
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input
+            data-testid="show-main-interim-checkbox"
+            type="checkbox"
+            checked={settings.showMainInterim}
+            onChange={() => dispatch(toggleShowMainInterim())}
+          />
+          הצג דיבור ביניים
+        </label>
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input
+            data-testid="show-main-final-checkbox"
+            type="checkbox"
+            checked={settings.showMainFinal}
+            onChange={() => dispatch(toggleShowMainFinal())}
+          />
+          הצג דיבור סופי
+        </label>
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input
+            data-testid="show-main-mic-checkbox"
+            type="checkbox"
+            checked={settings.showMainMic}
+            onChange={() => dispatch(toggleShowMainMic())}
+          />
+          הצג עוצמת מיקרופון בלוח הראשי
+        </label>
+      </div>
       <label className="flex items-center gap-2 text-sm cursor-pointer">
         <input
           data-testid="record-audio-checkbox"

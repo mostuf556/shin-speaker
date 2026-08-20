@@ -57,6 +57,7 @@ const slice = createSlice({
     },
     clearBoard(state) {
       state.interimText = "";
+      state.staleText = "";
     },
     setStaleText(state, a: PayloadAction<string>) {
       state.staleText = a.payload;
