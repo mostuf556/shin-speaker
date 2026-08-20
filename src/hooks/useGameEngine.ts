@@ -762,13 +762,15 @@ export function useGameEngine() {
       audioElementRef.current?.pause();
       const audio = new Audio(sentence.audioUrl);
       audioElementRef.current = audio;
-      audio.currentTime = Math.max(0, fromTime);
+      let timingScale = 1;
+      const sourceTime = Math.max(0, fromTime);
+      audio.currentTime = sourceTime;
       dispatch(
         setStatus(activeRef.current ? "playback-in-game" : "playback-out-of-game"),
       );
       dispatch(setPlayback({ sentenceId: sentence.id, currentTime: fromTime }));
       const initialWordIndex = sentence.words.reduce(
-        (index, word, i) => (word.time <= fromTime ? i : index),
+        (index, word, i) => (word.time <= sourceTime ? i : index),
         -1,
       );
       dispatch(
@@ -785,9 +787,10 @@ export function useGameEngine() {
       const updatePlaybackPosition = () => {
         const t = audio.currentTime;
         dispatch(setPlayback({ sentenceId: sentence.id, currentTime: t }));
+        const sourcePosition = t / timingScale;
         let idx = -1;
         for (let i = 0; i < sentence.words.length; i++) {
-          if (sentence.words[i].time <= t) idx = i;
+          if (sentence.words[i].time <= sourcePosition) idx = i;
           else break;
         }
         if (idx !== lastHighlightedWord) {
@@ -808,6 +811,14 @@ export function useGameEngine() {
         }
       };
       audio.ontimeupdate = updatePlaybackPosition;
+      audio.onloadedmetadata = () => {
+        const recordedDuration = sentence.durationMs / 1000;
+        if (recordedDuration > 0 && Number.isFinite(audio.duration)) {
+          timingScale = audio.duration / recordedDuration;
+          audio.currentTime = sourceTime * timingScale;
+          updatePlaybackPosition();
+        }
+      };
       audio.onplay = () => {
         if (playbackRaf == null) playbackRaf = requestAnimationFrame(tickPlayback);
       };

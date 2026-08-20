@@ -756,7 +756,7 @@ function MainStageWords({
           key={`${sentence.id}-${index}`}
           data-testid={`main-stage-word-${sentence.id}-${index}`}
           data-highlighted={index === highlightedWord ? "true" : "false"}
-          className={`px-1 rounded transition-all duration-150 ${
+          className={`inline-block px-1 rounded transition-all duration-150 ${
             index === highlightedWord
               ? "bg-emerald-500 text-white shadow-sm scale-110"
               : ""
