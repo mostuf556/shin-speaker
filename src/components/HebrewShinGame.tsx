@@ -98,7 +98,13 @@ const STAGE_BACKGROUNDS = [
 
 const ALL_STATUSES = Object.keys(STATUS_LABELS) as AppStatus[];
 
-function AppStatusVisualizer({ status }: { status: AppStatus }) {
+function AppStatusVisualizer({
+  status,
+  recordAudio,
+}: {
+  status: AppStatus;
+  recordAudio: boolean;
+}) {
   return (
     <div
       className="flex flex-wrap items-center gap-1.5"
@@ -119,7 +125,7 @@ function AppStatusVisualizer({ status }: { status: AppStatus }) {
                 : `${STATUS_CHIP[s].off} opacity-70`
             }`}
           >
-            {STATUS_LABELS[s]}
+            {s === "recording" && !recordAudio ? "מזהה דיבור" : STATUS_LABELS[s]}
           </div>
         );
       })}
@@ -141,7 +147,9 @@ export function HebrewShinGame() {
   const settings = useAppSelector((s) => s.settings);
   const logEntries = useAppSelector((s) => s.log.entries);
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
-  const [logFilter, setLogFilter] = useState<"all" | "sst" | "tts">("all");
+  const [logFilter, setLogFilter] = useState<
+    "all" | "sst" | "tts" | "recorder" | "playback"
+  >("all");
 
   const { start, stop, playRecording, playTTSHighlighted, dismissError } =
     useGameEngine();
@@ -268,7 +276,7 @@ export function HebrewShinGame() {
             </div>
           </div>
           <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-            <AppStatusVisualizer status={status} />
+            <AppStatusVisualizer status={status} recordAudio={settings.recordAudio} />
             <div className="flex items-center gap-1 rounded-md border border-border bg-card p-1" data-testid="sentence-end-detection-toggle">
               <Button
                 data-testid="sentence-end-detection-timeout"
@@ -425,7 +433,8 @@ export function HebrewShinGame() {
             <div className="flex items-center justify-between mb-2 gap-2">
               <h2 className="font-semibold">יומן אירועים</h2>
               <div className="flex gap-2">
-                {(["all", "sst", "tts"] as const).map((filter) => (
+                {(["all", "sst", "tts", "recorder", "playback"] as const).map(
+                  (filter) => (
                   <Button
                     key={filter}
                     data-testid={`log-filter-${filter}`}
@@ -433,9 +442,16 @@ export function HebrewShinGame() {
                     variant={logFilter === filter ? "default" : "outline"}
                     onClick={() => setLogFilter(filter)}
                   >
-                    {filter === "all" ? "הכל" : filter.toUpperCase()}
+                    {filter === "all"
+                      ? "הכל"
+                      : filter === "recorder"
+                        ? "הקלטה"
+                        : filter === "playback"
+                          ? "השמעה"
+                          : filter.toUpperCase()}
                   </Button>
-                ))}
+                  ),
+                )}
                 <Button
                   data-testid="log-copy"
                   size="sm"

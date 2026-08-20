@@ -309,12 +309,27 @@ export function useGameEngine() {
     let mr: MediaRecorder | null = null;
     if (shouldRecordAudio) {
       try {
-        mr = new MediaRecorder(stream!);
+        const preferredMimeTypes = [
+          "audio/webm;codecs=opus",
+          "audio/webm",
+          "audio/mp4",
+          "audio/ogg;codecs=opus",
+        ];
+        const mimeType = preferredMimeTypes.find((type) =>
+          MediaRecorder.isTypeSupported(type),
+        );
+        mr = mimeType
+          ? new MediaRecorder(stream!, { mimeType })
+          : new MediaRecorder(stream!);
+        log("recorder", "configured", {
+          mimeType: mr.mimeType || mimeType || "browser-default",
+        });
       } catch (e: any) {
         log("recorder", "unavailable", { message: e?.message ?? String(e) });
         reportError(`Audio recording could not start: ${e?.message ?? e}`, e);
         stream?.getTracks().forEach((t) => t.stop());
         stopMeter();
+        dispatch(setRecording(false));
         dispatch(setActive(false));
         return;
       }
@@ -614,7 +629,6 @@ export function useGameEngine() {
           }
           if (errorPausedRef.current || !activeRef.current) return;
           const delay = settingsRef.current.restartDelayMs;
-          dispatch(setRecording(false));
           if (!settingsRef.current.autoRestartSST) {
             dispatch(setActive(false));
             dispatch(setStatus("idle"));
@@ -651,8 +665,15 @@ export function useGameEngine() {
           log("recorder", "started");
         } catch (e: any) {
           log("recorder", "start failed", { message: e?.message ?? String(e) });
-          mr = null;
-          mediaRecorderRef.current = null;
+          try {
+            stream?.getTracks().forEach((t) => t.stop());
+          } catch {
+            /* noop */
+          }
+          stopMeter();
+          dispatch(setRecording(false));
+          reportError(`Audio recording could not start: ${e?.message ?? e}`, e);
+          return;
         }
       }
       recognition.start();
@@ -758,6 +779,13 @@ export function useGameEngine() {
         dispatch(setHighlight(null));
         if (!activeRef.current) dispatch(setStatus("idle"));
         else dispatch(setStatus("recording"));
+      };
+      audio.onerror = () => {
+        log("playback", "audio error", { id: sentence.id, url: sentence.audioUrl });
+        dispatch(setPlayback({ sentenceId: null }));
+        dispatch(setHighlight(null));
+        dispatch(setStatus(activeRef.current ? "recording" : "idle"));
+        reportError("הקלטת השמע לא ניתנת להשמעה");
       };
       audio.play().catch((e) => {
         log("playback", "play error", e?.message);
