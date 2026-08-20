@@ -264,7 +264,7 @@ export function useGameEngine() {
 
   const startIteration = useCallback(async () => {
     if (!loopingRef.current) return;
-    dispatch(clearBoard());
+    dispatch(setInterim(""));
     log("session", "iteration start");
 
     const SR: any =
@@ -281,6 +281,7 @@ export function useGameEngine() {
 
     const shouldRecordAudio = settingsRef.current.recordAudio;
     let stream: MediaStream | null = null;
+    let recorderStarted = false;
     if (shouldRecordAudio) {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -363,6 +364,7 @@ export function useGameEngine() {
       });
 
     let finalizedThisRun = false;
+    let receivedTranscript = false;
 
     recognition.onresult = (event: any) => {
       clearResultWatchdog();
@@ -392,6 +394,11 @@ export function useGameEngine() {
         return;
       }
 
+      if (!receivedTranscript) {
+        receivedTranscript = true;
+        dispatch(setStaleText(""));
+        logRecognitionEvent("new-sentence-display");
+      }
       currentSentenceRef.current = transcript;
 
       log("sst", result.isFinal ? "final-result" : "interim-result", {
@@ -569,7 +576,17 @@ export function useGameEngine() {
     };
 
     try {
-      mr?.start();
+      if (mr) {
+        try {
+          mr.start();
+          recorderStarted = true;
+          log("recorder", "started");
+        } catch (e: any) {
+          log("recorder", "start failed", { message: e?.message ?? String(e) });
+          mr = null;
+          mediaRecorderRef.current = null;
+        }
+      }
       recognition.start();
       resultWatchdog = setTimeout(() => {
         if (finalizedThisRun || currentSentenceRef.current) return;
@@ -595,7 +612,7 @@ export function useGameEngine() {
     }
     dispatch(setRecording(true));
     dispatch(setStatus("recording"));
-    log("recorder", shouldRecordAudio ? "started" : "disabled");
+    log("recorder", recorderStarted ? "started" : "disabled");
     log("sst", "started");
   }, [dispatch, log, reportError, runActionsFor, startMeter, stopMeter]);
 
