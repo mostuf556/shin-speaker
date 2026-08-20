@@ -34,18 +34,6 @@ const slice = createSlice({
   reducers: {
     appendLog: {
       reducer(state, action: PayloadAction<LogEntry>) {
-        const last = state.entries[state.entries.length - 1];
-        if (
-          last &&
-          last.tag === action.payload.tag &&
-          last.message === action.payload.message &&
-          last.data === action.payload.data
-        ) {
-          // Dedup: bump count + refresh time instead of pushing duplicate row.
-          last.count += 1;
-          last.time = action.payload.time;
-          return;
-        }
         state.entries.push(action.payload);
         if (state.entries.length > 500)
           state.entries.splice(0, state.entries.length - 500);

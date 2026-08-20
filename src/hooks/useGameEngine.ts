@@ -371,6 +371,10 @@ export function useGameEngine() {
     recognition.onspeechstart = () => {
       logRecognitionEvent("speech-start");
       receivedTranscript = false;
+      sentenceStartResultIndex = lastResultCount;
+      currentSentenceRef.current = "";
+      wordsRef.current = [];
+      knownWordsRef.current = [];
     };
     recognition.onspeechend = () => logRecognitionEvent("speech-end");
     recognition.onnomatch = (event: any) =>
@@ -381,9 +385,12 @@ export function useGameEngine() {
 
     let finalizedThisRun = false;
     let receivedTranscript = false;
+    let sentenceStartResultIndex = 0;
+    let lastResultCount = 0;
 
     recognition.onresult = (event: any) => {
       clearResultWatchdog();
+      lastResultCount = event.results.length;
       const result = event.results[event.results.length - 1];
       logRecognitionEvent("result-received", {
         resultIndex: event.resultIndex,
@@ -399,7 +406,7 @@ export function useGameEngine() {
       if (!result) return;
 
       const transcript = mergeRecognitionSegments(
-        Array.from(event.results as ArrayLike<any>)
+        Array.from(event.results as ArrayLike<any>).slice(sentenceStartResultIndex)
           .map((item: any) => item[0]?.transcript ?? ""),
       );
       const displayTranscript = result[0]?.transcript?.trim() ?? "";
