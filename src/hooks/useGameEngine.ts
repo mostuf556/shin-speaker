@@ -299,15 +299,17 @@ export function useGameEngine() {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       } catch (e: any) {
-        reportError(`Microphone access denied: ${e?.message ?? e}`, e);
-        dispatch(setActive(false));
-        return;
+        log("recorder", "microphone unavailable", {
+          message: e?.message ?? String(e),
+        });
       }
-      streamRef.current = stream;
-      startMeter(stream);
+      if (stream) {
+        streamRef.current = stream;
+        startMeter(stream);
+      }
     }
     let mr: MediaRecorder | null = null;
-    if (shouldRecordAudio) {
+    if (shouldRecordAudio && stream) {
       try {
         const preferredMimeTypes = [
           "audio/webm;codecs=opus",
@@ -326,12 +328,10 @@ export function useGameEngine() {
         });
       } catch (e: any) {
         log("recorder", "unavailable", { message: e?.message ?? String(e) });
-        reportError(`Audio recording could not start: ${e?.message ?? e}`, e);
         stream?.getTracks().forEach((t) => t.stop());
         stopMeter();
-        dispatch(setRecording(false));
-        dispatch(setActive(false));
-        return;
+        stream = null;
+        streamRef.current = null;
       }
     }
     mediaRecorderRef.current = mr;
@@ -671,9 +671,10 @@ export function useGameEngine() {
             /* noop */
           }
           stopMeter();
-          dispatch(setRecording(false));
-          reportError(`Audio recording could not start: ${e?.message ?? e}`, e);
-          return;
+          stream = null;
+          streamRef.current = null;
+          mr = null;
+          mediaRecorderRef.current = null;
         }
       }
       recognition.start();
