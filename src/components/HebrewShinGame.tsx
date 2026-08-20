@@ -233,16 +233,25 @@ export function HebrewShinGame() {
     (settings.showMainInterim && interimText) ||
     (settings.showMainFinal && staleText) ||
     "";
-  const mainStagePlaybackSentence = playingSentenceId
-    ? sentences.find((sentence) => sentence.id === playingSentenceId)
+  // The sentence the main stage should render: whatever is currently being
+  // highlighted (playback OR tts), else the sentence being played, else the
+  // last final text.
+  const mainStageHighlightSentence = highlight
+    ? sentences.find((sentence) => sentence.id === highlight.sentenceId)
     : undefined;
+  const mainStagePlaybackSentence =
+    mainStageHighlightSentence ??
+    (playingSentenceId
+      ? sentences.find((sentence) => sentence.id === playingSentenceId)
+      : undefined);
   const mainStageFinalSentence =
     mainStagePlaybackSentence ?? sentences.find((sentence) => sentence.text === staleText);
   const mainStagePlaybackWord =
-    highlight?.source === "playback" &&
-    highlight.sentenceId === playingSentenceId
+    highlight && mainStageFinalSentence?.id === highlight.sentenceId
       ? highlight.wordIndex
       : -1;
+  const mainStageHighlightSource = highlight?.source ?? null;
+
 
   return (
     <div
@@ -380,6 +389,7 @@ export function HebrewShinGame() {
                       <MainStageWords
                         sentence={mainStageFinalSentence}
                         highlightedWord={mainStagePlaybackWord}
+                        highlightSource={mainStageHighlightSource}
                       />
                     ) : (
                       staleText
@@ -400,6 +410,7 @@ export function HebrewShinGame() {
                 <MainStageWords
                   sentence={mainStageFinalSentence}
                   highlightedWord={mainStagePlaybackWord}
+                  highlightSource={mainStageHighlightSource}
                 />
               ) : (
                 mainStageText
@@ -740,9 +751,11 @@ function SentenceRow({
 function MainStageWords({
   sentence,
   highlightedWord,
+  highlightSource,
 }: {
   sentence: Sentence;
   highlightedWord: number;
+  highlightSource: "playback" | "tts" | null;
 }) {
   if (sentence.words.length === 0) return sentence.text;
 
@@ -758,7 +771,9 @@ function MainStageWords({
           data-highlighted={index === highlightedWord ? "true" : "false"}
           className={`inline-block px-1 rounded transition-all duration-150 ${
             index === highlightedWord
-              ? "bg-emerald-500 text-white shadow-sm scale-110"
+              ? highlightSource === "tts"
+                ? "bg-indigo-500 text-white shadow-sm scale-110"
+                : "bg-emerald-500 text-white shadow-sm scale-110"
               : ""
           } ${word.word.includes("ש") ? "underline decoration-primary decoration-2" : ""}`}
         >
